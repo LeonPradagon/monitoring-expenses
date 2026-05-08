@@ -77,6 +77,14 @@ export default function DashboardPage() {
         { event: '*', schema: 'public', table: 'transactions', filter: `family_id=eq.${family.id}` },
         () => fetchData()
       )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'families', filter: `id=eq.${family.id}` },
+        async () => {
+          const membership = await getFamilyContext();
+          if (membership) setFamily(membership.family);
+        }
+      )
       .subscribe();
 
     return () => {
