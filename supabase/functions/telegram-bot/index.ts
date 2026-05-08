@@ -26,13 +26,27 @@ async function askAI(prompt: string, context: string) {
         messages: [
           {
             role: "system",
-            content: `Anda adalah Nanalys, asisten keuangan pribadi. 
-            KONTEKS: ${context}
-            1. Catat pengeluaran -> JSON: {"type": "expense", "amount": 20000, "category": "Makan", "note": "bakso"}
-            2. Update saldo -> JSON: {"type": "update_balance", "amount": 1000000}
-            3. Update budget -> JSON: {"type": "update_budget", "amount": 5000000}
-            4. Chatting -> Balas ramah.
-            Categories: Makan, Transport, Belanja, Tagihan, Hiburan, Lainnya.`
+            content: `Anda adalah Nanalys, asisten keuangan pribadi yang sangat cerdas dan teliti.
+            Tugas Anda adalah mengekstrak data dari pesan user ke dalam format JSON yang tepat.
+
+            KONTEKS SAAT INI:
+            - Keluarga: ${context}
+            - Kategori Tersedia: Makan, Transport, Belanja, Tagihan, Hiburan, Lainnya.
+
+            ATURAN RESPON:
+            1. Jika user mencatat pengeluaran, balas HANYA dengan JSON: {"type": "expense", "amount": 20000, "category": "Makan", "note": "bakso"}
+            2. Jika user update saldo total, balas HANYA dengan JSON: {"type": "update_balance", "amount": 1000000}
+            3. Jika user update budget bulanan, balas HANYA dengan JSON: {"type": "update_budget", "amount": 5000000}
+            4. Jika user bertanya atau mengobrol biasa, balaslah dengan ramah dan informatif sebagai asisten keuangan.
+            5. JANGAN memberikan teks penjelasan jika Anda mengirimkan JSON.
+            6. Pastikan angka (amount) adalah integer murni tanpa titik/koma.
+            
+            CONTOH:
+            User: "beli kopi 15000"
+            Respon: {"type": "expense", "amount": 15000, "category": "Makan", "note": "kopi"}
+            
+            User: "set saldo jadi 2 juta"
+            Respon: {"type": "update_balance", "amount": 2000000}`
           },
           { role: "user", content: prompt }
         ]
@@ -67,15 +81,21 @@ bot.command("export", async (ctx: Context) => {
     
     const summaryData = [
       { "Keterangan": "Saldo Saat Ini", "Nilai": member.families.total_balance },
-      { "Keterangan": "Budget Bulanan", "Nilai": member.families.total_budget },
-      { "Keterangan": "Total Pengeluaran", "Nilai": totalSpend },
-      { "Keterangan": "Sisa Budget", "Nilai": Number(member.families.total_budget) - totalSpend }
+      { "Keterangan": "Sisa Budget", "Nilai": member.families.total_budget },
+      { "Keterangan": "Total Pengeluaran (Data Terlampir)", "Nilai": totalSpend }
     ];
     XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(summaryData), "Summary");
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(transactions.map(t => ({ "Tanggal": t.date, "Kategori": t.category?.name, "Nominal": t.amount, "Catatan": t.note }))), "Transactions");
+    
+    const transactionSheetData = transactions.map(t => ({
+      "Tanggal": new Date(t.date).toLocaleString('id-ID'),
+      "Kategori": t.category?.name || "Lainnya",
+      "Nominal": Number(t.amount),
+      "Catatan": t.note || "-"
+    }));
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(transactionSheetData), "Transactions");
 
-    const excelBuffer = XLSX.write(workbook, { type: "array", bookType: "xlsx" });
-    await ctx.replyWithDocument(new InputFile(excelBuffer, `Laporan_Keuangan.xlsx`));
+    const excelBuffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+    await ctx.replyWithDocument(new InputFile(excelBuffer, `Laporan_Keuangan_${new Date().toISOString().split('T')[0]}.xlsx`));
   } catch (err) { await ctx.reply("❌ Gagal membuat laporan."); }
 });
 
@@ -117,23 +137,26 @@ bot.on("message:text", async (ctx: Context) => {
           family_id: member.family_id, category_id: category.id, amount: aiParsed.amount, note: aiParsed.note || "", source: "telegram-ai", created_by: member.user_id, date: new Date().toISOString()
         });
 
-        // 2. Update Family Balance (Deduct)
+        // 2. Update Family Balance & Budget (Deduct Both)
         const newBalance = Number(member.families.total_balance) - aiParsed.amount;
-        await supabase.from("families").update({ total_balance: newBalance }).eq("id", member.family_id);
-
-        // 3. Check Budget Status
-        const { data: allTrans } = await supabase.from("transactions").select("amount").eq("family_id", member.family_id);
-        const totalSpent = allTrans.reduce((sum, t) => sum + Number(t.amount), 0);
-        const budgetLimit = Number(member.families.total_budget);
+        const newBudget = Number(member.families.total_budget) - aiParsed.amount;
         
+        await supabase.from("families").update({ 
+          total_balance: newBalance,
+          total_budget: newBudget
+        }).eq("id", member.family_id);
+
+        // 3. Check Budget Status for Alert
+        // We use a separate query to get total spent if we want to show original vs spent, 
+        // but here we just use the newBudget value to alert if it's low.
         let alertMsg = "";
-        if (totalSpent >= budgetLimit) {
-          alertMsg = `\n\n🚨 *WARNING: BUDGET TERLAMPAUI!* 🚨\nTotal pengeluaran (*${formatter.format(totalSpent)}*) sudah melebihi budget bulanan (*${formatter.format(budgetLimit)}*). Segera stop pengeluaran!`;
-        } else if (totalSpent >= budgetLimit * 0.8) {
-          alertMsg = `\n\n⚠️ *PERINGATAN BUDGET* ⚠️\nPengeluaran Anda sudah mencapai 80% dari budget bulanan. Sisa budget: *${formatter.format(budgetLimit - totalSpent)}*`;
+        if (newBudget <= 0) {
+          alertMsg = `\n\n🚨 *WARNING: BUDGET HABIS!* 🚨\nBudget Anda sudah terpakai semua atau terlampaui!`;
+        } else if (newBudget < 100000) { // Example threshold
+          alertMsg = `\n\n⚠️ *PERINGATAN BUDGET* ⚠️\nSisa budget Anda tinggal sedikit: *${formatter.format(newBudget)}*`;
         }
 
-        return ctx.reply(`✅ *Tercatat!*\n💸 *${formatter.format(aiParsed.amount)}* — ${category.icon} ${category.name}\n💰 Sisa Saldo: *${formatter.format(newBalance)}*${alertMsg}`, { parse_mode: "Markdown" });
+        return ctx.reply(`✅ *Tercatat!*\n💸 *${formatter.format(aiParsed.amount)}* — ${category.icon} ${category.name}\n💰 Sisa Saldo: *${formatter.format(newBalance)}*\n📊 Sisa Budget: *${formatter.format(newBudget)}*${alertMsg}`, { parse_mode: "Markdown" });
       }
     } catch (e) { }
   }
