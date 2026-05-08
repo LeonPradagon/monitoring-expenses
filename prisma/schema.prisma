@@ -1,0 +1,73 @@
+generator client {
+  provider        = "prisma-client-js"
+  output          = "./client"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// MoneyTrack Pro Models
+model Family {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
+  inviteCode  String   @unique @map("invite_code")
+  totalBalance Decimal  @default(0) @map("total_balance") @db.Decimal(15, 2)
+  totalBudget  Decimal  @default(0) @map("total_budget") @db.Decimal(15, 2)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  members      FamilyMember[]
+  categories   Category[]
+  transactions Transaction[]
+
+  @@map("families")
+}
+
+model FamilyMember {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId             String   @map("user_id")
+  familyId           String   @map("family_id") @db.Uuid
+  role               String   @default("member")
+  telegramId         BigInt?  @map("telegram_id")
+  telegramLinkCode   String?  @map("telegram_link_code")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@map("family_members")
+}
+
+model Category {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  familyId    String   @map("family_id") @db.Uuid
+  name        String
+  icon        String?
+  budgetLimit Decimal  @map("budget_limit") @db.Decimal(12, 2)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  family       Family        @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@map("categories")
+}
+
+model Transaction {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  familyId    String   @map("family_id") @db.Uuid
+  categoryId  String   @map("category_id") @db.Uuid
+  amount      Decimal  @db.Decimal(12, 2)
+  date        DateTime @default(now())
+  note        String?
+  source      String   @default("web")
+  createdBy   String   @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  family   Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@map("transactions")
+}
+
