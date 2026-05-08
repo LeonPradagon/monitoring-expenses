@@ -134,7 +134,7 @@ bot.on("message:text", async (ctx: Context) => {
 
         // 1. Insert Transaction
         await supabase.from("transactions").insert({
-          family_id: member.family_id, category_id: category.id, amount: aiParsed.amount, note: aiParsed.note || "", source: "telegram-ai", created_by: member.user_id, date: new Date().toISOString()
+          family_id: member.family_id, category_id: category.id, amount: aiParsed.amount, note: aiParsed.note || "", source: "telegram", created_by: member.user_id, date: new Date().toISOString()
         });
 
         // 2. Update Family Balance & Budget (Deduct Both)
