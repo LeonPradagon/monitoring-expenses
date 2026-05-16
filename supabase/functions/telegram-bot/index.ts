@@ -11,7 +11,7 @@ const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY") || "";
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const bot = new Bot(TELEGRAM_TOKEN);
 
-async function askAI(prompt: string, context: string) {
+async function askAI(prompt: string, financialContext: string) {
   if (!OPENROUTER_API_KEY) return null;
   try {
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -26,27 +26,26 @@ async function askAI(prompt: string, context: string) {
         messages: [
           {
             role: "system",
-            content: `Anda adalah Nanalys, asisten keuangan pribadi yang sangat cerdas dan teliti.
-            Tugas Anda adalah mengekstrak data dari pesan user ke dalam format JSON yang tepat.
-
-            KONTEKS SAAT INI:
-            - Keluarga: ${context}
-            - Kategori Tersedia: Makan, Transport, Belanja, Tagihan, Hiburan, Lainnya.
-
+            content: `Anda adalah Nanalys, Senior Financial Accountant yang profesional, teliti, dan empatik.
+            
+            Tugas Anda:
+            1. Membantu user mencatat pengeluaran, update saldo, atau budget.
+            2. Memberikan saran keuangan yang cerdas dan manusiawi (Gunakan "Saya" dan "Anda").
+            3. Berikan apresiasi jika user disiplin, atau peringatan halus jika budget menipis.
+            
+            KONTEKS FINANSIAL SAAT INI:
+            ${financialContext}
+            
             ATURAN RESPON:
-            1. Jika user mencatat pengeluaran, balas HANYA dengan JSON: {"type": "expense", "amount": 20000, "category": "Makan", "note": "bakso"}
-            2. Jika user update saldo total, balas HANYA dengan JSON: {"type": "update_balance", "amount": 1000000}
-            3. Jika user update budget bulanan, balas HANYA dengan JSON: {"type": "update_budget", "amount": 5000000}
-            4. Jika user bertanya atau mengobrol biasa, balaslah dengan ramah dan informatif sebagai asisten keuangan.
-            5. JANGAN memberikan teks penjelasan jika Anda mengirimkan JSON.
-            6. Pastikan angka (amount) adalah integer murni tanpa titik/koma.
+            - Selalu balas dengan bahasa yang ramah dan profesional sebagai akuntan pribadi.
+            - Jika pesan mengandung intent transaksi, Anda WAJIB menyertakan blok JSON di akhir pesan Anda.
+            - JSON harus menggunakan format: {"type": "expense" | "update_balance" | "update_budget", "amount": number, "category": "Nama Kategori", "note": "catatan", "advice": "saran singkat"}
+            - Jika tidak ada transaksi (hanya ngobrol), jangan sertakan JSON.
+            - Pastikan kategori sesuai dengan daftar yang tersedia. Jika tidak yakin, gunakan 'Lainnya'.
             
-            CONTOH:
-            User: "beli kopi 15000"
-            Respon: {"type": "expense", "amount": 15000, "category": "Makan", "note": "kopi"}
-            
-            User: "set saldo jadi 2 juta"
-            Respon: {"type": "update_balance", "amount": 2000000}`
+            CONTOH RESPON TRANSAKSI:
+            "Sudah saya catat ya! Makan bakso Rp25.000. Rasanya memang enak, tapi pastikan sisa budget makan cukup sampai akhir bulan ya.
+            {"type": "expense", "amount": 25000, "category": "Makan", "note": "bakso", "advice": "Makan di luar sesekali boleh, tapi kontrol frekuensinya."}"`
           },
           { role: "user", content: prompt }
         ]
@@ -107,12 +106,25 @@ bot.on("message:text", async (ctx: Context) => {
   const { data: member, error: memberError } = await supabase.from("family_members").select("*, families(*)").eq("telegram_id", telegramId).single();
   if (memberError || !member) return ctx.reply("❌ Akun belum terdaftar.");
 
+  // Fetch dynamic categories
+  const { data: categories } = await supabase.from("categories").select("*").eq("family_id", member.family_id);
+  const categoriesList = categories?.map(c => `${c.icon} ${c.name}`).join(", ") || "Makan, Transport, Belanja, Tagihan, Kesehatan, Lainnya";
+
+  const financialContext = `
+    - User di keluarga: "${member.families.name}"
+    - Saldo saat ini: Rp${member.families.total_balance}
+    - Sisa budget bulan ini: Rp${member.families.total_budget}
+    - Kategori yang tersedia: ${categoriesList}
+  `;
+
   await ctx.replyWithChatAction("typing");
-  const aiResponse = await askAI(text, `User di keluarga "${member.families.name}". Saldo: ${member.families.total_balance}. Budget: ${member.families.total_budget}.`);
+  const aiResponse = await askAI(text, financialContext);
   
-  if (!aiResponse) return ctx.reply("❓ Maaf, ada gangguan teknis.");
+  if (!aiResponse) return ctx.reply("❓ Maaf, sepertinya saya sedang sedikit kebingungan. Bisa diulang?");
 
   const jsonMatch = aiResponse.match(/\{.*\}/s);
+  let humanPart = aiResponse.replace(/\{.*\}/s, "").trim();
+
   if (jsonMatch) {
     try {
       const aiParsed = JSON.parse(jsonMatch[0]);
@@ -120,24 +132,32 @@ bot.on("message:text", async (ctx: Context) => {
 
       if (aiParsed.type === "update_balance") {
         await supabase.from("families").update({ total_balance: aiParsed.amount }).eq("id", member.family_id);
-        return ctx.reply(`💰 *Saldo Diperbarui!*\nTotal: *${formatter.format(aiParsed.amount)}*`, { parse_mode: "Markdown" });
+        const reply = humanPart || `Siap! Saldo Anda sudah saya perbarui menjadi *${formatter.format(aiParsed.amount)}*.`;
+        return ctx.reply(reply, { parse_mode: "Markdown" });
       }
 
       if (aiParsed.type === "update_budget") {
         await supabase.from("families").update({ total_budget: aiParsed.amount }).eq("id", member.family_id);
-        return ctx.reply(`📊 *Budget Diperbarui!*\nBulan ini: *${formatter.format(aiParsed.amount)}*`, { parse_mode: "Markdown" });
+        const reply = humanPart || `Baik, budget bulan ini sudah saya set ke *${formatter.format(aiParsed.amount)}*. Mari kita jaga bersama!`;
+        return ctx.reply(reply, { parse_mode: "Markdown" });
       }
 
       if (aiParsed.type === "expense") {
-        const { data: category } = await supabase.from("categories").select("*").eq("family_id", member.family_id).ilike("name", `%${aiParsed.category}%`).limit(1).single();
-        if (!category) return ctx.reply(`❌ Kategori "${aiParsed.category}" tidak ditemukan.`);
+        // Find category using AI's suggestion or fallback to first match
+        let category = categories?.find(c => c.name.toLowerCase() === aiParsed.category.toLowerCase());
+        if (!category) {
+          const { data: fuzzyCategory } = await supabase.from("categories").select("*").eq("family_id", member.family_id).ilike("name", `%${aiParsed.category}%`).limit(1).single();
+          category = fuzzyCategory;
+        }
+
+        if (!category) return ctx.reply(`❌ Maaf, saya tidak menemukan kategori "${aiParsed.category}". Bisa gunakan kategori lain?`);
 
         // 1. Insert Transaction
         await supabase.from("transactions").insert({
           family_id: member.family_id, category_id: category.id, amount: aiParsed.amount, note: aiParsed.note || "", source: "telegram", created_by: member.user_id, date: new Date().toISOString()
         });
 
-        // 2. Update Family Balance & Budget (Deduct Both)
+        // 2. Update Family Balance & Budget
         const newBalance = Number(member.families.total_balance) - aiParsed.amount;
         const newBudget = Number(member.families.total_budget) - aiParsed.amount;
         
@@ -146,21 +166,30 @@ bot.on("message:text", async (ctx: Context) => {
           total_budget: newBudget
         }).eq("id", member.family_id);
 
-        // 3. Check Budget Status for Alert
-        // We use a separate query to get total spent if we want to show original vs spent, 
-        // but here we just use the newBudget value to alert if it's low.
+        // 3. Construct Confirmation
         let alertMsg = "";
         if (newBudget <= 0) {
-          alertMsg = `\n\n🚨 *WARNING: BUDGET HABIS!* 🚨\nBudget Anda sudah terpakai semua atau terlampaui!`;
-        } else if (newBudget < 100000) { // Example threshold
-          alertMsg = `\n\n⚠️ *PERINGATAN BUDGET* ⚠️\nSisa budget Anda tinggal sedikit: *${formatter.format(newBudget)}*`;
+          alertMsg = `\n\n🚨 *Peringatan:* Budget Anda sudah habis atau terlampaui!`;
+        } else if (newBudget < 200000) {
+          alertMsg = `\n\n⚠️ *Catatan:* Sisa budget Anda menipis (*${formatter.format(newBudget)}*).`;
         }
 
-        return ctx.reply(`✅ *Tercatat!*\n💸 *${formatter.format(aiParsed.amount)}* — ${category.icon} ${category.name}\n💰 Sisa Saldo: *${formatter.format(newBalance)}*\n📊 Sisa Budget: *${formatter.format(newBudget)}*${alertMsg}`, { parse_mode: "Markdown" });
+        const confirmationMsg = `✅ *Tercatat!*
+💸 *${formatter.format(aiParsed.amount)}* — ${category.icon} ${category.name}
+💰 Saldo: *${formatter.format(newBalance)}*
+📊 Budget: *${formatter.format(newBudget)}*${alertMsg}
+
+💬 _${aiParsed.advice || "Tetap semangat mengelola keuangan!"}_`;
+
+        return ctx.reply(humanPart ? `${humanPart}\n\n${confirmationMsg}` : confirmationMsg, { parse_mode: "Markdown" });
       }
-    } catch (e) { }
+    } catch (e) { 
+      console.error("JSON Parse Error:", e);
+    }
   }
-  return ctx.reply(`🤖 ${aiResponse}`);
+  
+  // Default for normal chat or failed parse
+  return ctx.reply(aiResponse.replace(/\{.*\}/s, "").trim() || aiResponse);
 });
 
 const handleUpdate = webhookCallback(bot, "std/http");
