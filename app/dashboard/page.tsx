@@ -23,6 +23,8 @@ export default function DashboardPage() {
   const [joining, setJoining] = useState(false);
   const [familyName, setFamilyName] = useState("");
   const [inviteCode, setInviteCode] = useState("");
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const supabase = createClient();
   const router = useRouter();
 
@@ -178,9 +180,32 @@ export default function DashboardPage() {
       <header className="flex items-center justify-between mb-8 max-w-7xl mx-auto">
         <div>
           <h1 className="text-3xl font-bold text-white tracking-tight">{family.name}</h1>
-          <p className="text-muted-foreground text-sm flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Live Monitoring
-          </p>
+          <div className="flex items-center gap-4 mt-1">
+            <p className="text-muted-foreground text-sm flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Live Monitoring
+            </p>
+            <div className="h-4 w-px bg-white/10" />
+            <select 
+              value={selectedMonth} 
+              onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+              className="bg-transparent text-sm text-white font-medium focus:outline-none cursor-pointer hover:text-primary transition-colors"
+            >
+              {Array.from({ length: 12 }, (_, i) => (
+                <option key={i} value={i} className="bg-zinc-900 text-white">
+                  {new Date(0, i).toLocaleString('id-ID', { month: 'long' })}
+                </option>
+              ))}
+            </select>
+            <select 
+              value={selectedYear} 
+              onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+              className="bg-transparent text-sm text-white font-medium focus:outline-none cursor-pointer hover:text-primary transition-colors"
+            >
+              {[2024, 2025, 2026].map(y => (
+                <option key={y} value={y} className="bg-zinc-900 text-white">{y}</option>
+              ))}
+            </select>
+          </div>
         </div>
         <div className="flex items-center gap-6">
           <TelegramConnect familyMember={member} />
@@ -203,7 +228,14 @@ export default function DashboardPage() {
           </div>
         ) : (
           <>
-            <StatsDashboard transactions={transactions} categories={categories} family={family} />
+            <StatsDashboard 
+              transactions={transactions.filter(t => {
+                const d = new Date(t.date);
+                return d.getMonth() === selectedMonth && d.getFullYear() === selectedYear;
+              })} 
+              categories={categories} 
+              family={family} 
+            />
             
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <div className="lg:col-span-2 space-y-12">
@@ -221,7 +253,13 @@ export default function DashboardPage() {
                     fetchData();
                   }} 
                 />
-                <TransactionList transactions={transactions} familyName={family.name} />
+                <TransactionList 
+                  transactions={transactions.filter(t => {
+                    const d = new Date(t.date);
+                    return d.getMonth() === selectedMonth && d.getFullYear() === selectedYear;
+                  })} 
+                  familyName={family.name} 
+                />
               </div>
               
               <div className="space-y-8">

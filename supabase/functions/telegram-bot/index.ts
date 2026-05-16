@@ -39,9 +39,19 @@ async function askAI(prompt: string, financialContext: string) {
             ATURAN RESPON:
             - Selalu balas dengan bahasa yang ramah dan profesional sebagai akuntan pribadi.
             - Jika pesan mengandung intent transaksi, Anda WAJIB menyertakan blok JSON di akhir pesan Anda.
-            - JSON harus menggunakan format: {"type": "expense" | "update_balance" | "update_budget", "amount": number, "category": "Nama Kategori", "note": "catatan", "advice": "saran singkat"}
+            - Intent transaksi: 
+               1. "expense": mencatat pengeluaran (misal: "makan 20rb").
+               2. "update_balance": update total uang yang ada (misal: "saldo saya sekarang 1jt").
+               3. "update_budget": update batas pengeluaran bulan ini (misal: "budget bulan ini jadi 2jt").
+               4. "get_summary": melihat laporan bulanan (misal: "lihat laporan bulan mei" atau "pengeluaran bulan ini").
+            - JSON harus menggunakan format: {"type": "expense" | "update_balance" | "update_budget" | "get_summary", "amount": number, "category": "Nama Kategori", "note": "catatan", "advice": "saran singkat", "month": number, "year": number}
+            - Untuk 'get_summary', isi field 'month' (1-12) dan 'year'.
             - Jika tidak ada transaksi (hanya ngobrol), jangan sertakan JSON.
             - Pastikan kategori sesuai dengan daftar yang tersedia. Jika tidak yakin, gunakan 'Lainnya'.
+            
+            CONTOH RESPON SUMMARY:
+            "Tentu, saya siapkan laporan keuangan Anda untuk bulan Mei 2026. Tunggu sebentar ya...
+            {"type": "get_summary", "month": 5, "year": 2026}"
             
             CONTOH RESPON TRANSAKSI:
             "Sudah saya catat ya! Makan bakso Rp25.000. Rasanya memang enak, tapi pastikan sisa budget makan cukup sampai akhir bulan ya.
@@ -64,6 +74,60 @@ bot.command("start", async (ctx: Context) => {
     return ctx.reply(`✅ *Terhubung!*\n\nCatat pengeluaran (20k makan) atau cek budget Anda kapan saja!`, { parse_mode: "Markdown" });
   }
   await ctx.reply("👋 Halo! Saya Nanalys. Saya siap menjaga keuangan Anda.");
+});
+
+async function sendMonthlySummary(ctx: Context, member: any, month: number, year: number) {
+  const startDate = new Date(year, month - 1, 1).toISOString();
+  const endDate = new Date(year, month, 0, 23, 59, 59).toISOString();
+
+  const { data: transactions } = await supabase.from("transactions")
+    .select("*, category:categories(name, icon)")
+    .eq("family_id", member.family_id)
+    .gte("date", startDate)
+    .lte("date", endDate);
+
+  const monthName = new Date(year, month - 1).toLocaleString('id-ID', { month: 'long', year: 'numeric' });
+
+  if (!transactions || transactions.length === 0) {
+    return ctx.reply(`📅 *Laporan ${monthName}*\n\nBelum ada transaksi tercatat untuk periode ini.`);
+  }
+
+  const total = transactions.reduce((sum, t) => sum + Number(t.amount), 0);
+  const byCategory = transactions.reduce((acc, t) => {
+    const catName = t.category?.name || "Lainnya";
+    const catIcon = t.category?.icon || "📦";
+    if (!acc[catName]) acc[catName] = { amount: 0, icon: catIcon };
+    acc[catName].amount += Number(t.amount);
+    return acc;
+  }, {} as Record<string, { amount: number, icon: string }>);
+
+  const formatter = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' });
+  let report = `📊 *Laporan Keuangan ${monthName}*\n`;
+  report += `━━━━━━━━━━━━━━━━━━━━\n`;
+  report += `💰 Total Pengeluaran: *${formatter.format(total)}*\n\n`;
+  
+  Object.entries(byCategory)
+    .sort((a, b) => b[1].amount - a[1].amount)
+    .forEach(([name, data]) => {
+      report += `${data.icon} *${name}*: ${formatter.format(data.amount)}\n`;
+    });
+
+  const budgetDiff = Number(member.families.total_budget) - total;
+  report += `\n━━━━━━━━━━━━━━━━━━━━\n`;
+  report += `📊 Status Budget: *${budgetDiff >= 0 ? 'Surplus' : 'Defisit'}*\n`;
+  report += `💡 _Saran: ${budgetDiff < 0 ? "Waduh, pengeluaran sudah lewat budget! Ayo lebih disiplin lagi." : "Kerja bagus! Terus pertahankan pola belanja hemat Anda."}_`;
+
+  return ctx.reply(report, { parse_mode: "Markdown" });
+}
+
+bot.command("summary", async (ctx: Context) => {
+  const telegramId = ctx.from?.id;
+  const { data: member } = await supabase.from("family_members").select("*, families(*)").eq("telegram_id", telegramId).single();
+  if (!member) return ctx.reply("❌ Akun belum terdaftar.");
+  
+  const now = new Date();
+  await ctx.replyWithChatAction("typing");
+  return sendMonthlySummary(ctx, member, now.getMonth() + 1, now.getFullYear());
 });
 
 bot.command("export", async (ctx: Context) => {
@@ -140,6 +204,13 @@ bot.on("message:text", async (ctx: Context) => {
         await supabase.from("families").update({ total_budget: aiParsed.amount }).eq("id", member.family_id);
         const reply = humanPart || `Baik, budget bulan ini sudah saya set ke *${formatter.format(aiParsed.amount)}*. Mari kita jaga bersama!`;
         return ctx.reply(reply, { parse_mode: "Markdown" });
+      }
+
+      if (aiParsed.type === "get_summary") {
+        const month = aiParsed.month || new Date().getMonth() + 1;
+        const year = aiParsed.year || new Date().getFullYear();
+        if (humanPart) await ctx.reply(humanPart);
+        return sendMonthlySummary(ctx, member, month, year);
       }
 
       if (aiParsed.type === "expense") {
