@@ -1,11 +1,17 @@
 // @ts-nocheck
-import { Bot, webhookCallback, InputFile, Context } from "https://esm.sh/grammy@1.21.1";
+import {
+  Bot,
+  webhookCallback,
+  InputFile,
+  Context,
+} from "https://esm.sh/grammy@1.21.1";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import * as XLSX from "https://esm.sh/xlsx@0.18.5";
 
 const TELEGRAM_TOKEN = Deno.env.get("TELEGRAM_TOKEN") || "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+const SUPABASE_SERVICE_ROLE_KEY =
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY") || "";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -14,19 +20,21 @@ const bot = new Bot(TELEGRAM_TOKEN);
 async function askAI(prompt: string, financialContext: string) {
   if (!OPENROUTER_API_KEY) return null;
   try {
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-        "HTTP-Referer": "https://moneytrack-pro.vercel.app",
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "openai/gpt-oss-120b:free",
-        messages: [
-          {
-            role: "system",
-            content: `Anda adalah Nanalys, Senior Financial Accountant yang profesional, teliti, dan empatik.
+    const response = await fetch(
+      "https://openrouter.ai/api/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+          "HTTP-Referer": "https://moneytrack-pro.vercel.app",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "openai/gpt-oss-120b:free",
+          messages: [
+            {
+              role: "system",
+              content: `Anda adalah Nanalys, Senior Financial Accountant yang profesional, teliti, dan empatik.
             
             Tugas Anda:
             1. Membantu user mencatat pengeluaran, update saldo, atau budget.
@@ -56,57 +64,85 @@ async function askAI(prompt: string, financialContext: string) {
             
             CONTOH RESPON TRANSAKSI:
             "Sudah saya catat ya! Makan bakso Rp25.000. Rasanya memang enak, tapi pastikan sisa budget makan cukup sampai akhir bulan ya.
-            {"type": "expense", "amount": 25000, "category": "Makan", "note": "bakso", "advice": "Makan di luar sesekali boleh, tapi kontrol frekuensinya."}"`
-          },
-          { role: "user", content: prompt }
-        ]
-      })
-    });
+            {"type": "expense", "amount": 25000, "category": "Makan", "note": "bakso", "advice": "Makan di luar sesekali boleh, tapi kontrol frekuensinya."}"`,
+            },
+            { role: "user", content: prompt },
+          ],
+        }),
+      },
+    );
     const data = await response.json();
     return data.choices?.[0]?.message?.content || null;
-  } catch (e) { return null; }
+  } catch (e) {
+    return null;
+  }
 }
 
 bot.command("start", async (ctx: Context) => {
   const payload = ctx.match;
   if (payload) {
-    const { data: member, error } = await supabase.from("family_members").update({ telegram_id: ctx.from?.id, telegram_link_code: null }).eq("telegram_link_code", payload).select().single();
+    const { data: member, error } = await supabase
+      .from("family_members")
+      .update({ telegram_id: ctx.from?.id, telegram_link_code: null })
+      .eq("telegram_link_code", payload)
+      .select()
+      .single();
     if (error || !member) return ctx.reply("❌ Kode aktivasi tidak valid.");
-    return ctx.reply(`✅ *Terhubung!*\n\nCatat pengeluaran (20k makan) atau cek budget Anda kapan saja!`, { parse_mode: "Markdown" });
+    return ctx.reply(
+      `✅ *Terhubung!*\n\nCatat pengeluaran (20k makan) atau cek budget Anda kapan saja!`,
+      { parse_mode: "Markdown" },
+    );
   }
   await ctx.reply("👋 Halo! Saya Nanalys. Saya siap menjaga keuangan Anda.");
 });
 
-async function sendMonthlySummary(ctx: Context, member: any, month: number, year: number) {
+async function sendMonthlySummary(
+  ctx: Context,
+  member: any,
+  month: number,
+  year: number,
+) {
   const startDate = new Date(year, month - 1, 1).toISOString();
   const endDate = new Date(year, month, 0, 23, 59, 59).toISOString();
 
-  const { data: transactions } = await supabase.from("transactions")
+  const { data: transactions } = await supabase
+    .from("transactions")
     .select("*, category:categories(name, icon)")
     .eq("family_id", member.family_id)
     .gte("date", startDate)
     .lte("date", endDate);
 
-  const monthName = new Date(year, month - 1).toLocaleString('id-ID', { month: 'long', year: 'numeric' });
+  const monthName = new Date(year, month - 1).toLocaleString("id-ID", {
+    month: "long",
+    year: "numeric",
+  });
 
   if (!transactions || transactions.length === 0) {
-    return ctx.reply(`📅 *Laporan ${monthName}*\n\nBelum ada transaksi tercatat untuk periode ini.`);
+    return ctx.reply(
+      `📅 *Laporan ${monthName}*\n\nBelum ada transaksi tercatat untuk periode ini.`,
+    );
   }
 
   const total = transactions.reduce((sum, t) => sum + Number(t.amount), 0);
-  const byCategory = transactions.reduce((acc, t) => {
-    const catName = t.category?.name || "Lainnya";
-    const catIcon = t.category?.icon || "📦";
-    if (!acc[catName]) acc[catName] = { amount: 0, icon: catIcon };
-    acc[catName].amount += Number(t.amount);
-    return acc;
-  }, {} as Record<string, { amount: number, icon: string }>);
+  const byCategory = transactions.reduce(
+    (acc, t) => {
+      const catName = t.category?.name || "Lainnya";
+      const catIcon = t.category?.icon || "📦";
+      if (!acc[catName]) acc[catName] = { amount: 0, icon: catIcon };
+      acc[catName].amount += Number(t.amount);
+      return acc;
+    },
+    {} as Record<string, { amount: number; icon: string }>,
+  );
 
-  const formatter = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' });
+  const formatter = new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+  });
   let report = `📊 *Laporan Keuangan ${monthName}*\n`;
   report += `━━━━━━━━━━━━━━━━━━━━\n`;
   report += `💰 Total Pengeluaran: *${formatter.format(total)}*\n\n`;
-  
+
   Object.entries(byCategory)
     .sort((a, b) => b[1].amount - a[1].amount)
     .forEach(([name, data]) => {
@@ -115,7 +151,7 @@ async function sendMonthlySummary(ctx: Context, member: any, month: number, year
 
   const budgetDiff = Number(member.families.total_budget) - total;
   report += `\n━━━━━━━━━━━━━━━━━━━━\n`;
-  report += `📊 Status Budget: *${budgetDiff >= 0 ? 'Surplus' : 'Defisit'}*\n`;
+  report += `📊 Status Budget: *${budgetDiff >= 0 ? "Surplus" : "Defisit"}*\n`;
   report += `💡 _Saran: ${budgetDiff < 0 ? "Waduh, pengeluaran sudah lewat budget! Ayo lebih disiplin lagi." : "Kerja bagus! Terus pertahankan pola belanja hemat Anda."}_`;
 
   return ctx.reply(report, { parse_mode: "Markdown" });
@@ -123,9 +159,13 @@ async function sendMonthlySummary(ctx: Context, member: any, month: number, year
 
 bot.command("summary", async (ctx: Context) => {
   const telegramId = ctx.from?.id;
-  const { data: member } = await supabase.from("family_members").select("*, families(*)").eq("telegram_id", telegramId).single();
+  const { data: member } = await supabase
+    .from("family_members")
+    .select("*, families(*)")
+    .eq("telegram_id", telegramId)
+    .single();
   if (!member) return ctx.reply("❌ Akun belum terdaftar.");
-  
+
   const now = new Date();
   await ctx.replyWithChatAction("typing");
   return sendMonthlySummary(ctx, member, now.getMonth() + 1, now.getFullYear());
@@ -134,46 +174,85 @@ bot.command("summary", async (ctx: Context) => {
 bot.command("export", async (ctx: Context) => {
   try {
     const telegramId = ctx.from?.id;
-    const { data: member } = await supabase.from("family_members").select("*, families(*)").eq("telegram_id", telegramId).single();
+    const { data: member } = await supabase
+      .from("family_members")
+      .select("*, families(*)")
+      .eq("telegram_id", telegramId)
+      .single();
     if (!member) return ctx.reply("❌ Akun belum terdaftar.");
 
-    const { data: transactions } = await supabase.from("transactions").select("*, category:categories(name)").eq("family_id", member.family_id).order('date', { ascending: false });
-    if (!transactions || transactions.length === 0) return ctx.reply("📭 Belum ada data.");
+    const { data: transactions } = await supabase
+      .from("transactions")
+      .select("*, category:categories(name)")
+      .eq("family_id", member.family_id)
+      .order("date", { ascending: false });
+    if (!transactions || transactions.length === 0)
+      return ctx.reply("📭 Belum ada data.");
 
-    const totalSpend = transactions.reduce((sum, t) => sum + Number(t.amount), 0);
+    const totalSpend = transactions.reduce(
+      (sum, t) => sum + Number(t.amount),
+      0,
+    );
     const workbook = XLSX.utils.book_new();
-    
-    const summaryData = [
-      { "Keterangan": "Saldo Saat Ini", "Nilai": member.families.total_balance },
-      { "Keterangan": "Sisa Budget", "Nilai": member.families.total_budget },
-      { "Keterangan": "Total Pengeluaran (Data Terlampir)", "Nilai": totalSpend }
-    ];
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(summaryData), "Summary");
-    
-    const transactionSheetData = transactions.map(t => ({
-      "Tanggal": new Date(t.date).toLocaleString('id-ID'),
-      "Kategori": t.category?.name || "Lainnya",
-      "Nominal": Number(t.amount),
-      "Catatan": t.note || "-"
-    }));
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(transactionSheetData), "Transactions");
 
-    const excelBuffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
-    await ctx.replyWithDocument(new InputFile(excelBuffer, `Laporan_Keuangan_${new Date().toISOString().split('T')[0]}.xlsx`));
-  } catch (err) { await ctx.reply("❌ Gagal membuat laporan."); }
+    const summaryData = [
+      { Keterangan: "Saldo Saat Ini", Nilai: member.families.total_balance },
+      { Keterangan: "Sisa Budget", Nilai: member.families.total_budget },
+      { Keterangan: "Total Pengeluaran (Data Terlampir)", Nilai: totalSpend },
+    ];
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.json_to_sheet(summaryData),
+      "Summary",
+    );
+
+    const transactionSheetData = transactions.map((t) => ({
+      Tanggal: new Date(t.date).toLocaleString("id-ID"),
+      Kategori: t.category?.name || "Lainnya",
+      Nominal: Number(t.amount),
+      Catatan: t.note || "-",
+    }));
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.json_to_sheet(transactionSheetData),
+      "Transactions",
+    );
+
+    const excelBuffer = XLSX.write(workbook, {
+      type: "buffer",
+      bookType: "xlsx",
+    });
+    await ctx.replyWithDocument(
+      new InputFile(
+        excelBuffer,
+        `Laporan_Keuangan_${new Date().toISOString().split("T")[0]}.xlsx`,
+      ),
+    );
+  } catch (err) {
+    await ctx.reply("❌ Gagal membuat laporan.");
+  }
 });
 
 bot.on("message:text", async (ctx: Context) => {
   const text = ctx.message?.text || "";
   const telegramId = ctx.from?.id;
-  if (text.startsWith('/')) return;
+  if (text.startsWith("/")) return;
 
-  const { data: member, error: memberError } = await supabase.from("family_members").select("*, families(*)").eq("telegram_id", telegramId).single();
+  const { data: member, error: memberError } = await supabase
+    .from("family_members")
+    .select("*, families(*)")
+    .eq("telegram_id", telegramId)
+    .single();
   if (memberError || !member) return ctx.reply("❌ Akun belum terdaftar.");
 
   // Fetch dynamic categories
-  const { data: categories } = await supabase.from("categories").select("*").eq("family_id", member.family_id);
-  const categoriesList = categories?.map(c => `${c.icon} ${c.name}`).join(", ") || "Makan, Transport, Belanja, Tagihan, Kesehatan, Lainnya";
+  const { data: categories } = await supabase
+    .from("categories")
+    .select("*")
+    .eq("family_id", member.family_id);
+  const categoriesList =
+    categories?.map((c) => `${c.icon} ${c.name}`).join(", ") ||
+    "Makan, Transport, Belanja, Tagihan, Kesehatan, Lainnya";
 
   const financialContext = `
     - User di keluarga: "${member.families.name}"
@@ -184,8 +263,11 @@ bot.on("message:text", async (ctx: Context) => {
 
   await ctx.replyWithChatAction("typing");
   const aiResponse = await askAI(text, financialContext);
-  
-  if (!aiResponse) return ctx.reply("❓ Maaf, sepertinya saya sedang sedikit kebingungan. Bisa diulang?");
+
+  if (!aiResponse)
+    return ctx.reply(
+      "❓ Maaf, sepertinya saya sedang sedikit kebingungan. Bisa diulang?",
+    );
 
   const jsonMatch = aiResponse.match(/\{.*\}/s);
   let humanPart = aiResponse.replace(/\{.*\}/s, "").trim();
@@ -193,17 +275,30 @@ bot.on("message:text", async (ctx: Context) => {
   if (jsonMatch) {
     try {
       const aiParsed = JSON.parse(jsonMatch[0]);
-      const formatter = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' });
+      const formatter = new Intl.NumberFormat("id-ID", {
+        style: "currency",
+        currency: "IDR",
+      });
 
       if (aiParsed.type === "update_balance") {
-        await supabase.from("families").update({ total_balance: aiParsed.amount }).eq("id", member.family_id);
-        const reply = humanPart || `Siap! Saldo Anda sudah saya perbarui menjadi *${formatter.format(aiParsed.amount)}*.`;
+        await supabase
+          .from("families")
+          .update({ total_balance: aiParsed.amount })
+          .eq("id", member.family_id);
+        const reply =
+          humanPart ||
+          `Siap! Saldo Anda sudah saya perbarui menjadi *${formatter.format(aiParsed.amount)}*.`;
         return ctx.reply(reply, { parse_mode: "Markdown" });
       }
 
       if (aiParsed.type === "update_budget") {
-        await supabase.from("families").update({ total_budget: aiParsed.amount }).eq("id", member.family_id);
-        const reply = humanPart || `Baik, budget bulan ini sudah saya set ke *${formatter.format(aiParsed.amount)}*. Mari kita jaga bersama!`;
+        await supabase
+          .from("families")
+          .update({ total_budget: aiParsed.amount })
+          .eq("id", member.family_id);
+        const reply =
+          humanPart ||
+          `Baik, budget bulan ini sudah saya set ke *${formatter.format(aiParsed.amount)}*. Mari kita jaga bersama!`;
         return ctx.reply(reply, { parse_mode: "Markdown" });
       }
 
@@ -216,27 +311,49 @@ bot.on("message:text", async (ctx: Context) => {
 
       if (aiParsed.type === "expense") {
         // Find category using AI's suggestion or fallback to first match
-        let category = categories?.find(c => c.name.toLowerCase() === aiParsed.category.toLowerCase());
+        let category = categories?.find(
+          (c) => c.name.toLowerCase() === aiParsed.category.toLowerCase(),
+        );
         if (!category) {
-          const { data: fuzzyCategory } = await supabase.from("categories").select("*").eq("family_id", member.family_id).ilike("name", `%${aiParsed.category}%`).limit(1).single();
+          const { data: fuzzyCategory } = await supabase
+            .from("categories")
+            .select("*")
+            .eq("family_id", member.family_id)
+            .ilike("name", `%${aiParsed.category}%`)
+            .limit(1)
+            .single();
           category = fuzzyCategory;
         }
 
-        if (!category) return ctx.reply(`❌ Maaf, saya tidak menemukan kategori "${aiParsed.category}". Bisa gunakan kategori lain?`);
+        if (!category)
+          return ctx.reply(
+            `❌ Maaf, saya tidak menemukan kategori "${aiParsed.category}". Bisa gunakan kategori lain?`,
+          );
 
         // 1. Insert Transaction
         await supabase.from("transactions").insert({
-          family_id: member.family_id, category_id: category.id, amount: aiParsed.amount, note: aiParsed.note || "", source: "telegram", created_by: member.user_id, date: new Date().toISOString()
+          family_id: member.family_id,
+          category_id: category.id,
+          amount: aiParsed.amount,
+          note: aiParsed.note || "",
+          source: "telegram",
+          created_by: member.user_id,
+          date: new Date().toISOString(),
         });
 
         // 2. Update Family Balance & Budget
-        const newBalance = Number(member.families.total_balance) - aiParsed.amount;
-        const newBudget = Number(member.families.total_budget) - aiParsed.amount;
-        
-        await supabase.from("families").update({ 
-          total_balance: newBalance,
-          total_budget: newBudget
-        }).eq("id", member.family_id);
+        const newBalance =
+          Number(member.families.total_balance) - aiParsed.amount;
+        const newBudget =
+          Number(member.families.total_budget) - aiParsed.amount;
+
+        await supabase
+          .from("families")
+          .update({
+            total_balance: newBalance,
+            total_budget: newBudget,
+          })
+          .eq("id", member.family_id);
 
         // 3. Construct Confirmation
         let alertMsg = "";
@@ -253,13 +370,16 @@ bot.on("message:text", async (ctx: Context) => {
 
 💬 _${aiParsed.advice || "Tetap semangat mengelola keuangan!"}_`;
 
-        return ctx.reply(humanPart ? `${humanPart}\n\n${confirmationMsg}` : confirmationMsg, { parse_mode: "Markdown" });
+        return ctx.reply(
+          humanPart ? `${humanPart}\n\n${confirmationMsg}` : confirmationMsg,
+          { parse_mode: "Markdown" },
+        );
       }
-    } catch (e) { 
+    } catch (e) {
       console.error("JSON Parse Error:", e);
     }
   }
-  
+
   // Default for normal chat or failed parse
   return ctx.reply(aiResponse.replace(/\{.*\}/s, "").trim() || aiResponse);
 });
@@ -284,6 +404,17 @@ function isDuplicate(updateId: number): boolean {
 
 Deno.serve(async (req: Request) => {
   const url = new URL(req.url);
+  if (url.searchParams.get("webhook_info") === "true") {
+    const token = Deno.env.get("TELEGRAM_TOKEN");
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`);
+      const data = await res.json();
+      return new Response(JSON.stringify(data), { status: 200, headers: { "Content-Type": "application/json" } });
+    } catch (err) {
+      return new Response(err.message, { status: 500 });
+    }
+  }
+
   if (url.searchParams.get("secret") !== Deno.env.get("FUNCTION_SECRET")) {
     return new Response("unauthorized", { status: 403 });
   }
@@ -299,22 +430,11 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Process the update in the background to respond to Telegram immediately (avoiding retries/timeouts)
-    if (typeof EdgeRuntime !== "undefined") {
-      EdgeRuntime.waitUntil(
-        (async () => {
-          try {
-            await bot.handleUpdate(update);
-          } catch (err) {
-            console.error("Error in bot.handleUpdate:", err);
-          }
-        })()
-      );
-    } else {
-      // Fallback for local development or other Deno environments
-      bot.handleUpdate(update).catch((err) => {
-        console.error("Error in bot.handleUpdate (fallback):", err);
-      });
+    // Await the update processing synchronously to keep Deno container active and prevent premature freezing
+    try {
+      await bot.handleUpdate(update);
+    } catch (err) {
+      console.error("Error in bot.handleUpdate:", err);
     }
 
     return new Response("ok", { status: 200 });
