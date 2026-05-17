@@ -37,8 +37,9 @@ async function askAI(prompt: string, financialContext: string) {
             ${financialContext}
             
             ATURAN RESPON:
-            - Selalu balas dengan bahasa yang ramah dan profesional sebagai akuntan pribadi.
-            - Jika pesan mengandung intent transaksi, Anda WAJIB menyertakan blok JSON di akhir pesan Anda.
+            - Selalu balas dengan bahasa yang ramah, hangat, dan profesional sebagai akuntan pribadi.
+            - DILARANG KERAS menggunakan bahasa teknis, koding, atau menyebutkan format JSON/sistem di dalam kalimat balasan Anda. Balas murni seperti percakapan manusia biasa.
+            - Jika pesan mengandung intent transaksi, Anda WAJIB menyertakan blok JSON di akhir pesan Anda secara rahasia (sistem yang akan membacanya).
             - Intent transaksi: 
                1. "expense": mencatat pengeluaran (misal: "makan 20rb").
                2. "update_balance": update total uang yang ada (misal: "saldo saya sekarang 1jt").
