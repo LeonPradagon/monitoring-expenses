@@ -264,9 +264,63 @@ bot.on("message:text", async (ctx: Context) => {
   return ctx.reply(aiResponse.replace(/\{.*\}/s, "").trim() || aiResponse);
 });
 
-const handleUpdate = webhookCallback(bot, "std/http");
+// Simple in-memory cache to deduplicate Telegram update retries
+const processedUpdates = new Set<number>();
+const MAX_CACHE_SIZE = 1000;
+
+function isDuplicate(updateId: number): boolean {
+  if (processedUpdates.has(updateId)) {
+    return true;
+  }
+  processedUpdates.add(updateId);
+  if (processedUpdates.size > MAX_CACHE_SIZE) {
+    const firstKey = processedUpdates.keys().next().value;
+    if (firstKey !== undefined) {
+      processedUpdates.delete(firstKey);
+    }
+  }
+  return false;
+}
+
 Deno.serve(async (req: Request) => {
   const url = new URL(req.url);
-  if (url.searchParams.get("secret") !== Deno.env.get("FUNCTION_SECRET")) return new Response("unauthorized", { status: 403 });
-  return await handleUpdate(req);
+  if (url.searchParams.get("secret") !== Deno.env.get("FUNCTION_SECRET")) {
+    return new Response("unauthorized", { status: 403 });
+  }
+
+  try {
+    const update = await req.json();
+    const updateId = update?.update_id;
+
+    if (updateId) {
+      if (isDuplicate(updateId)) {
+        console.warn(`Duplicate update ignored: ${updateId}`);
+        return new Response("ok", { status: 200 });
+      }
+    }
+
+    // Process the update in the background to respond to Telegram immediately (avoiding retries/timeouts)
+    if (typeof EdgeRuntime !== "undefined") {
+      EdgeRuntime.waitUntil(
+        (async () => {
+          try {
+            await bot.handleUpdate(update);
+          } catch (err) {
+            console.error("Error in bot.handleUpdate:", err);
+          }
+        })()
+      );
+    } else {
+      // Fallback for local development or other Deno environments
+      bot.handleUpdate(update).catch((err) => {
+        console.error("Error in bot.handleUpdate (fallback):", err);
+      });
+    }
+
+    return new Response("ok", { status: 200 });
+  } catch (err) {
+    console.error("Error handling request:", err);
+    // Always return 200 OK to Telegram so it doesn't keep retrying
+    return new Response("ok", { status: 200 });
+  }
 });
