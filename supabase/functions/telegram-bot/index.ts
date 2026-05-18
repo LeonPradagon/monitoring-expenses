@@ -30,7 +30,7 @@ async function askAI(prompt: string, financialContext: string) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "openai/gpt-oss-120b:free",
+          model: "qwen/qwen3-coder:free", // Atau "qwen/qwen-2.5-coder-32b-instruct:free" jika qwen3 belum rilis penuh
           messages: [
             {
               role: "system",
@@ -234,17 +234,29 @@ bot.command("export", async (ctx: Context) => {
 });
 
 bot.on("message:text", async (ctx: Context) => {
+  console.log("=> Received message:text");
   const text = ctx.message?.text || "";
   const telegramId = ctx.from?.id;
-  if (text.startsWith("/")) return;
+  console.log("=> Telegram ID:", telegramId, "Text:", text);
 
+  if (text.startsWith("/")) {
+    console.log("=> Command message, ignoring here");
+    return;
+  }
+
+  console.log("=> Fetching member data from Supabase");
   const { data: member, error: memberError } = await supabase
     .from("family_members")
     .select("*, families(*)")
     .eq("telegram_id", telegramId)
     .single();
-  if (memberError || !member) return ctx.reply("❌ Akun belum terdaftar.");
 
+  if (memberError || !member) {
+    console.log("=> Member not found or error:", memberError);
+    return ctx.reply("❌ Akun belum terdaftar.");
+  }
+
+  console.log("=> Fetching categories");
   // Fetch dynamic categories
   const { data: categories } = await supabase
     .from("categories")
@@ -261,16 +273,21 @@ bot.on("message:text", async (ctx: Context) => {
     - Kategori yang tersedia: ${categoriesList}
   `;
 
+  console.log("=> Sending typing action and asking AI");
   await ctx.replyWithChatAction("typing");
   const aiResponse = await askAI(text, financialContext);
+  console.log("=> AI Response:", aiResponse);
 
-  if (!aiResponse)
+  if (!aiResponse) {
+    console.log("=> AI Response is null, sending fallback");
     return ctx.reply(
       "❓ Maaf, sepertinya saya sedang sedikit kebingungan. Bisa diulang?",
     );
+  }
 
   const jsonMatch = aiResponse.match(/\{.*\}/s);
   let humanPart = aiResponse.replace(/\{.*\}/s, "").trim();
+  console.log("=> Has JSON match:", !!jsonMatch);
 
   if (jsonMatch) {
     try {
@@ -402,6 +419,32 @@ function isDuplicate(updateId: number): boolean {
   return false;
 }
 
+bot.catch(async (err) => {
+  console.error(`Error while handling update ${err.ctx.update.update_id}:`);
+  const e = err.error;
+  let errMsg = "Unknown Error";
+  if (e instanceof Error) {
+    errMsg = e.message;
+  } else {
+    errMsg = String(e);
+  }
+  console.error(e);
+  try {
+    // Log to DB for debug
+    await supabase.from("transactions").insert({
+      family_id: "00000000-0000-0000-0000-000000000000",
+      category_id: "00000000-0000-0000-0000-000000000000",
+      amount: 0,
+      note: errMsg,
+      source: "error_log",
+      created_by: "system"
+    }).catch(() => {});
+    await err.ctx.reply(`🚨 Terjadi kesalahan sistem: ${errMsg}`);
+  } catch (replyErr) {
+    console.error("Failed to send error message:", replyErr);
+  }
+});
+
 Deno.serve(async (req: Request) => {
   const url = new URL(req.url);
   if (url.searchParams.get("webhook_info") === "true") {
@@ -425,22 +468,19 @@ Deno.serve(async (req: Request) => {
 
     if (updateId) {
       if (isDuplicate(updateId)) {
-        console.warn(`Duplicate update ignored: ${updateId}`);
         return new Response("ok", { status: 200 });
       }
     }
 
-    // Await the update processing synchronously to keep Deno container active and prevent premature freezing
     try {
       await bot.handleUpdate(update);
     } catch (err) {
-      console.error("Error in bot.handleUpdate:", err);
+      console.error("Unhandled error in handleUpdate:", err);
     }
 
     return new Response("ok", { status: 200 });
   } catch (err) {
     console.error("Error handling request:", err);
-    // Always return 200 OK to Telegram so it doesn't keep retrying
     return new Response("ok", { status: 200 });
   }
 });
