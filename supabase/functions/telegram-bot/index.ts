@@ -12,27 +12,28 @@ const TELEGRAM_TOKEN = Deno.env.get("TELEGRAM_TOKEN") || "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY =
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-const HUGGINGFACE_API_KEY = Deno.env.get("HUGGINGFACE_API_KEY") || "";
+const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY") || "";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const bot = new Bot(TELEGRAM_TOKEN);
 
 async function askAI(prompt: string, financialContext: string) {
-  if (!HUGGINGFACE_API_KEY) {
-    console.error("=> HUGGINGFACE_API_KEY is missing!");
+  if (!OPENROUTER_API_KEY) {
+    console.error("=> OPENROUTER_API_KEY is missing!");
     return null;
   }
   try {
     const response = await fetch(
-      "https://router.huggingface.co/together/v1/chat/completions",
+      "https://openrouter.ai/api/v1/chat/completions",
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${HUGGINGFACE_API_KEY}`,
+          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+          "HTTP-Referer": "https://moneytrack-pro.vercel.app",
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemma-4-31B-it",
+          model: "google/gemma-4-26b-a4b-it:free",
           messages: [
             {
               role: "system",
@@ -70,7 +71,6 @@ async function askAI(prompt: string, financialContext: string) {
             },
             { role: "user", content: prompt },
           ],
-          max_tokens: 1024,
         }),
       },
     );
@@ -83,12 +83,7 @@ async function askAI(prompt: string, financialContext: string) {
 
     const data = await response.json();
     console.log("=> AI raw response keys:", Object.keys(data));
-    // Gemma 4 may return content in 'content' or 'reasoning' field
-    const choice = data.choices?.[0]?.message;
-    const content = choice?.content || "";
-    const reasoning = choice?.reasoning || "";
-    // Use content if available, otherwise fall back to reasoning
-    return content || reasoning || null;
+    return data.choices?.[0]?.message?.content || null;
   } catch (e) {
     console.error("=> AI Fetch Error:", e);
     return null;
