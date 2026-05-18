@@ -30,7 +30,7 @@ async function askAI(prompt: string, financialContext: string) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "qwen/qwen3-coder:free", // Atau "qwen/qwen-2.5-coder-32b-instruct:free" jika qwen3 belum rilis penuh
+          model: "qwen/qwen-2.5-coder-32b-instruct:free",
           messages: [
             {
               role: "system",
@@ -432,12 +432,12 @@ bot.catch(async (err) => {
   try {
     // Log to DB for debug
     await supabase.from("transactions").insert({
-      family_id: "00000000-0000-0000-0000-000000000000",
-      category_id: "00000000-0000-0000-0000-000000000000",
+      family_id: "a0a7be38-2d1b-4f9b-90f3-170cd9f5f1c6",
+      category_id: "82debb73-e9bb-4128-b3c9-f1c4318f3490",
       amount: 0,
       note: errMsg,
       source: "error_log",
-      created_by: "system"
+      created_by: "13b6026f-9c50-4742-9904-682fce3b9206"
     }).catch(() => {});
     await err.ctx.reply(`🚨 Terjadi kesalahan sistem: ${errMsg}`);
   } catch (replyErr) {
