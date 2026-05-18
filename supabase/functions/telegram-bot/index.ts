@@ -12,25 +12,24 @@ const TELEGRAM_TOKEN = Deno.env.get("TELEGRAM_TOKEN") || "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY =
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY") || "";
+const HUGGINGFACE_API_KEY = Deno.env.get("HUGGINGFACE_API_KEY") || "";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const bot = new Bot(TELEGRAM_TOKEN);
 
 async function askAI(prompt: string, financialContext: string) {
-  if (!OPENROUTER_API_KEY) return null;
+  if (!HUGGINGFACE_API_KEY) return null;
   try {
     const response = await fetch(
-      "https://openrouter.ai/api/v1/chat/completions",
+      "https://api-inference.huggingface.co/models/google/gemma-4-31B-it/v1/chat/completions",
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-          "HTTP-Referer": "https://moneytrack-pro.vercel.app",
+          Authorization: `Bearer ${HUGGINGFACE_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "qwen/qwen-2.5-coder-32b-instruct:free",
+          model: "google/gemma-4-31B-it",
           messages: [
             {
               role: "system",
