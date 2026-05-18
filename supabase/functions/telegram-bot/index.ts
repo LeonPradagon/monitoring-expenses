@@ -18,10 +18,13 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const bot = new Bot(TELEGRAM_TOKEN);
 
 async function askAI(prompt: string, financialContext: string) {
-  if (!HUGGINGFACE_API_KEY) return null;
+  if (!HUGGINGFACE_API_KEY) {
+    console.error("=> HUGGINGFACE_API_KEY is missing!");
+    return null;
+  }
   try {
     const response = await fetch(
-      "https://api-inference.huggingface.co/models/google/gemma-4-31B-it/v1/chat/completions",
+      "https://router.huggingface.co/together/v1/chat/completions",
       {
         method: "POST",
         headers: {
@@ -67,12 +70,27 @@ async function askAI(prompt: string, financialContext: string) {
             },
             { role: "user", content: prompt },
           ],
+          max_tokens: 1024,
         }),
       },
     );
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error("=> AI API Error:", response.status, errText);
+      return null;
+    }
+
     const data = await response.json();
-    return data.choices?.[0]?.message?.content || null;
+    console.log("=> AI raw response keys:", Object.keys(data));
+    // Gemma 4 may return content in 'content' or 'reasoning' field
+    const choice = data.choices?.[0]?.message;
+    const content = choice?.content || "";
+    const reasoning = choice?.reasoning || "";
+    // Use content if available, otherwise fall back to reasoning
+    return content || reasoning || null;
   } catch (e) {
+    console.error("=> AI Fetch Error:", e);
     return null;
   }
 }
