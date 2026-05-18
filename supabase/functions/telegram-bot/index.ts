@@ -459,6 +459,31 @@ bot.catch(async (err) => {
 
 Deno.serve(async (req: Request) => {
   const url = new URL(req.url);
+
+  // Reset webhook endpoint
+  if (url.searchParams.get("reset_webhook") === "true") {
+    const token = Deno.env.get("TELEGRAM_TOKEN");
+    const secret = Deno.env.get("FUNCTION_SECRET");
+    const webhookUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/telegram-bot?secret=${secret}`;
+    try {
+      // Delete old webhook
+      await fetch(`https://api.telegram.org/bot${token}/deleteWebhook?drop_pending_updates=true`);
+      // Set new webhook
+      const res = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: webhookUrl }),
+      });
+      const data = await res.json();
+      return new Response(JSON.stringify({ webhook_url: webhookUrl, result: data }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (err) {
+      return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+    }
+  }
+
   if (url.searchParams.get("webhook_info") === "true") {
     const token = Deno.env.get("TELEGRAM_TOKEN");
     try {
