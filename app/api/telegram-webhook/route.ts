@@ -55,9 +55,6 @@ async function askAI(prompt: string, financialContext: string) {
   if (NVIDIA_API_KEY) {
     try {
       console.log("=> Attempting NVIDIA API...");
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
-      
       const response = await fetch(
         "https://integrate.api.nvidia.com/v1/chat/completions",
         {
@@ -73,10 +70,8 @@ async function askAI(prompt: string, financialContext: string) {
               { role: "user", content: prompt },
             ],
           }),
-          signal: controller.signal
         },
       );
-      clearTimeout(timeoutId);
 
       if (response.ok) {
         const data = await response.json();
@@ -541,8 +536,15 @@ function isDuplicate(updateId: number): boolean {
   return false;
 }
 
+let botInitialized = false;
+
 export async function POST(req: NextRequest) {
   try {
+    if (!botInitialized) {
+      await bot.init();
+      botInitialized = true;
+    }
+
     // Verify Telegram Secret Token
     const secretToken = req.headers.get("x-telegram-bot-api-secret-token");
     if (secretToken !== TELEGRAM_SECRET_TOKEN) {
@@ -561,13 +563,14 @@ export async function POST(req: NextRequest) {
 
     try {
       await bot.handleUpdate(update);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Unhandled error in handleUpdate:", err);
+      return NextResponse.json({ error: "HandleUpdate error", details: err?.message || String(err) }, { status: 500 });
     }
 
     return NextResponse.json({ ok: true });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Webhook route error:", error);
-    return NextResponse.json({ ok: true }); // Always return 200 to prevent Telegram retry spam
+    return NextResponse.json({ error: "Route error", details: error?.message || String(error) }, { status: 500 });
   }
 }
