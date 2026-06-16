@@ -12,31 +12,18 @@ const TELEGRAM_TOKEN = Deno.env.get("TELEGRAM_TOKEN") || "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY =
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-const NVIDIA_API_KEY = Deno.env.get("NVIDIA_API_KEY") || "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";
+const NVIDIA_API_KEY =
+  Deno.env.get("NVIDIA_API_KEY") ||
+  "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";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const bot = new Bot(TELEGRAM_TOKEN);
 
 async function askAI(prompt: string, financialContext: string) {
-  if (!NVIDIA_API_KEY) {
-    console.error("=> NVIDIA_API_KEY is missing!");
-    return null;
-  }
-  try {
-    const response = await fetch(
-      "https://integrate.api.nvidia.com/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${NVIDIA_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "nvidia/nemotron-3-ultra-550b-a55b",
-          messages: [
-            {
-              role: "system",
-              content: `Anda adalah Nanalys, Senior Financial Accountant yang profesional, teliti, dan empatik.
+  const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY") || "";
+  const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || "";
+
+  const systemPrompt = `Anda adalah Nanalys, Senior Financial Accountant yang profesional, teliti, dan empatik.
             
             Tugas Anda:
             1. Membantu user mencatat pengeluaran, update saldo, atau budget.
@@ -66,27 +53,142 @@ async function askAI(prompt: string, financialContext: string) {
             
             CONTOH RESPON TRANSAKSI:
             "Sudah saya catat ya! Makan bakso Rp25.000. Rasanya memang enak, tapi pastikan sisa budget makan cukup sampai akhir bulan ya.
-            {"type": "expense", "amount": 25000, "category": "Makan", "note": "bakso", "advice": "Makan di luar sesekali boleh, tapi kontrol frekuensinya."}"`,
-            },
-            { role: "user", content: prompt },
-          ],
-        }),
-      },
-    );
+            {"type": "expense", "amount": 25000, "category": "Makan", "note": "bakso", "advice": "Makan di luar sesekali boleh, tapi kontrol frekuensinya."}`;
 
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error("=> AI API Error:", response.status, errText);
-      return null;
+  if (NVIDIA_API_KEY) {
+    try {
+      console.log("=> Attempting NVIDIA API...");
+      const response = await fetch(
+        "https://integrate.api.nvidia.com/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${NVIDIA_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "nvidia/nemotron-3-ultra-550b-a55b",
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: prompt },
+            ],
+          }),
+        },
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        const content = data.choices?.[0]?.message?.content;
+        if (content) {
+          console.log("=> NVIDIA API call succeeded!");
+          return content;
+        }
+      } else {
+        const errText = await response.text();
+        console.warn(
+          `=> NVIDIA API failed with status ${response.status}:`,
+          errText,
+        );
+      }
+    } catch (err) {
+      console.warn("=> NVIDIA Fetch Error, falling back...", err);
     }
-
-    const data = await response.json();
-    console.log("=> AI raw response keys:", Object.keys(data));
-    return data.choices?.[0]?.message?.content || null;
-  } catch (e) {
-    console.error("=> AI Fetch Error:", e);
-    return null;
+  } else {
+    console.log("=> NVIDIA_API_KEY is missing, skipping...");
   }
+
+  // === STRATEGY 1: TRY GROQ ===
+  if (GROQ_API_KEY) {
+    try {
+      console.log("=> Attempting Groq API...");
+      const response = await fetch(
+        "https://api.groq.com/openai/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${GROQ_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "llama-3.3-70b-versatile",
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: prompt },
+            ],
+            temperature: 0.3,
+          }),
+        },
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        const content = data.choices?.[0]?.message?.content;
+        if (content) {
+          console.log("=> Groq API call succeeded!");
+          return content;
+        }
+      } else {
+        const errText = await response.text();
+        console.warn(
+          `=> Groq API failed with status ${response.status}:`,
+          errText,
+        );
+      }
+    } catch (err) {
+      console.warn("=> Groq Fetch Error, falling back...", err);
+    }
+  } else {
+    console.log("=> GROQ_API_KEY is not configured, skipping to Gemini.");
+  }
+
+  // === STRATEGY 2: FALLBACK TO GEMINI ===
+  if (GEMINI_API_KEY) {
+    try {
+      console.log("=> Attempting Gemini API Fallback...");
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            contents: [
+              {
+                role: "user",
+                parts: [
+                  {
+                    text: `${systemPrompt}\n\nPERTANYAAN USER:\n${prompt}`,
+                  },
+                ],
+              },
+            ],
+          }),
+        },
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (content) {
+          console.log("=> Gemini Fallback API call succeeded!");
+          return content;
+        }
+      } else {
+        const errText = await response.text();
+        console.error(
+          `=> Gemini API failed with status ${response.status}:`,
+          errText,
+        );
+      }
+    } catch (err) {
+      console.error("=> Gemini Fetch Error:", err);
+    }
+  } else {
+    console.error("=> GEMINI_API_KEY is not configured.");
+  }
+
+  return null;
 }
 
 bot.command("start", async (ctx: Context) => {
@@ -442,14 +544,17 @@ bot.catch(async (err) => {
   console.error(e);
   try {
     // Log to DB for debug
-    await supabase.from("transactions").insert({
-      family_id: "a0a7be38-2d1b-4f9b-90f3-170cd9f5f1c6",
-      category_id: "82debb73-e9bb-4128-b3c9-f1c4318f3490",
-      amount: 0,
-      note: errMsg,
-      source: "error_log",
-      created_by: "13b6026f-9c50-4742-9904-682fce3b9206"
-    }).catch(() => {});
+    await supabase
+      .from("transactions")
+      .insert({
+        family_id: "a0a7be38-2d1b-4f9b-90f3-170cd9f5f1c6",
+        category_id: "82debb73-e9bb-4128-b3c9-f1c4318f3490",
+        amount: 0,
+        note: errMsg,
+        source: "error_log",
+        created_by: "13b6026f-9c50-4742-9904-682fce3b9206",
+      })
+      .catch(() => {});
     await err.ctx.reply(`🚨 Terjadi kesalahan sistem: ${errMsg}`);
   } catch (replyErr) {
     console.error("Failed to send error message:", replyErr);
@@ -466,29 +571,44 @@ Deno.serve(async (req: Request) => {
     const webhookUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/telegram-bot?secret=${secret}`;
     try {
       // Delete old webhook
-      await fetch(`https://api.telegram.org/bot${token}/deleteWebhook?drop_pending_updates=true`);
+      await fetch(
+        `https://api.telegram.org/bot${token}/deleteWebhook?drop_pending_updates=true`,
+      );
       // Set new webhook
-      const res = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: webhookUrl }),
-      });
+      const res = await fetch(
+        `https://api.telegram.org/bot${token}/setWebhook`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: webhookUrl }),
+        },
+      );
       const data = await res.json();
-      return new Response(JSON.stringify({ webhook_url: webhookUrl, result: data }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ webhook_url: webhookUrl, result: data }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     } catch (err) {
-      return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+      return new Response(JSON.stringify({ error: err.message }), {
+        status: 500,
+      });
     }
   }
 
   if (url.searchParams.get("webhook_info") === "true") {
     const token = Deno.env.get("TELEGRAM_TOKEN");
     try {
-      const res = await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`);
+      const res = await fetch(
+        `https://api.telegram.org/bot${token}/getWebhookInfo`,
+      );
       const data = await res.json();
-      return new Response(JSON.stringify(data), { status: 200, headers: { "Content-Type": "application/json" } });
+      return new Response(JSON.stringify(data), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
     } catch (err) {
       return new Response(err.message, { status: 500 });
     }
