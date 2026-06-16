@@ -58,6 +58,9 @@ async function askAI(prompt: string, financialContext: string) {
   if (NVIDIA_API_KEY) {
     try {
       console.log("=> Attempting NVIDIA API...");
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      
       const response = await fetch(
         "https://integrate.api.nvidia.com/v1/chat/completions",
         {
@@ -73,8 +76,10 @@ async function askAI(prompt: string, financialContext: string) {
               { role: "user", content: prompt },
             ],
           }),
+          signal: controller.signal
         },
       );
+      clearTimeout(timeoutId);
 
       if (response.ok) {
         const data = await response.json();
@@ -611,6 +616,28 @@ Deno.serve(async (req: Request) => {
       });
     } catch (err) {
       return new Response(err.message, { status: 500 });
+    }
+  }
+
+  if (url.searchParams.get("test_send") === "true") {
+    const token = Deno.env.get("TELEGRAM_TOKEN");
+    const chatId = url.searchParams.get("chat_id") || "1299663907";
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: "Pesan percobaan langsung dari API Telegram! (Ping success)"
+        })
+      });
+      const data = await res.json();
+      return new Response(JSON.stringify(data), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (err) {
+      return new Response(JSON.stringify({ error: err.message }), { status: 500 });
     }
   }
 
