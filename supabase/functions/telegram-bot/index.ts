@@ -12,28 +12,27 @@ const TELEGRAM_TOKEN = Deno.env.get("TELEGRAM_TOKEN") || "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY =
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY") || "";
+const NVIDIA_API_KEY = Deno.env.get("NVIDIA_API_KEY") || "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";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const bot = new Bot(TELEGRAM_TOKEN);
 
 async function askAI(prompt: string, financialContext: string) {
-  if (!OPENROUTER_API_KEY) {
-    console.error("=> OPENROUTER_API_KEY is missing!");
+  if (!NVIDIA_API_KEY) {
+    console.error("=> NVIDIA_API_KEY is missing!");
     return null;
   }
   try {
     const response = await fetch(
-      "https://openrouter.ai/api/v1/chat/completions",
+      "https://integrate.api.nvidia.com/v1/chat/completions",
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-          "HTTP-Referer": "https://moneytrack-pro.vercel.app",
+          Authorization: `Bearer ${NVIDIA_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemma-4-26b-a4b-it:free",
+          model: "nvidia/nemotron-3-ultra-550b-a55b",
           messages: [
             {
               role: "system",
