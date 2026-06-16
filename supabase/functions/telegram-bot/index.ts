@@ -67,7 +67,7 @@ async function askAI(prompt: string, financialContext: string) {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "nvidia/nemotron-3-ultra-550b-a55b",
+            model: "meta/llama-3.3-70b-instruct",
             messages: [
               { role: "system", content: systemPrompt },
               { role: "user", content: prompt },
