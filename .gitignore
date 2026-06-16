@@ -41,3 +41,10 @@ yarn-error.log*
 next-env.d.ts
 
 /lib/generated/prisma
+
+# debug scripts and webhook setup
+test_*.mjs
+check_*.mjs
+fetch_*.mjs
+get_*.mjs
+setup_webhook.mjs

@@ -1,27 +1,24 @@
-// @ts-nocheck
-import {
-  Bot,
-  webhookCallback,
-  InputFile,
-  Context,
-} from "https://esm.sh/grammy@1.21.1";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
-import * as XLSX from "https://esm.sh/xlsx@0.18.5";
+import { Bot, Context, InputFile } from "grammy";
+import { createClient } from "@supabase/supabase-js";
+import * as XLSX from "xlsx";
+import { NextRequest, NextResponse } from "next/server";
 
-const TELEGRAM_TOKEN = Deno.env.get("TELEGRAM_TOKEN") || "";
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
-const SUPABASE_SERVICE_ROLE_KEY =
-  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+export const maxDuration = 60; // Allow execution up to 60 seconds on Vercel Hobby
+
+const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || "";
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const NVIDIA_API_KEY =
-  Deno.env.get("NVIDIA_API_KEY") ||
+  process.env.NVIDIA_API_KEY ||
   "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";
+const TELEGRAM_SECRET_TOKEN = process.env.TELEGRAM_SECRET_TOKEN || "nanalys_vercel_secret_123";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const bot = new Bot(TELEGRAM_TOKEN);
 
 async function askAI(prompt: string, financialContext: string) {
-  const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY") || "";
-  const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || "";
+  const GROQ_API_KEY = process.env.GROQ_API_KEY || "";
+  const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 
   const systemPrompt = `Anda adalah Nanalys, Senior Financial Accountant yang profesional, teliti, dan empatik.
             
@@ -261,7 +258,7 @@ async function sendMonthlySummary(
   report += `━━━━━━━━━━━━━━━━━━━━\n`;
   report += `💰 Total Pengeluaran: *${formatter.format(total)}*\n\n`;
 
-  Object.entries(byCategory)
+  (Object.entries(byCategory) as [string, { amount: number; icon: string }][])
     .sort((a, b) => b[1].amount - a[1].amount)
     .forEach(([name, data]) => {
       report += `${data.icon} *${name}*: ${formatter.format(data.amount)}\n`;
@@ -336,10 +333,12 @@ bot.command("export", async (ctx: Context) => {
       "Transactions",
     );
 
+    // Provide the buffer
     const excelBuffer = XLSX.write(workbook, {
       type: "buffer",
       bookType: "xlsx",
     });
+    // In Next.js App Router, using InputFile from Buffer
     await ctx.replyWithDocument(
       new InputFile(
         excelBuffer,
@@ -349,6 +348,17 @@ bot.command("export", async (ctx: Context) => {
   } catch (err) {
     await ctx.reply("❌ Gagal membuat laporan.");
   }
+});
+
+bot.catch(async (err) => {
+  const ctx = err.ctx;
+  console.error(`Error while handling update ${ctx.update.update_id}:`);
+  const e = err.error;
+  console.error(e);
+});
+
+bot.command("ping", async (ctx) => {
+  await ctx.reply("Pong! Bot is ALIVE from Vercel! 🚀");
 });
 
 bot.on("message:text", async (ctx: Context) => {
@@ -375,7 +385,6 @@ bot.on("message:text", async (ctx: Context) => {
   }
 
   console.log("=> Fetching categories");
-  // Fetch dynamic categories
   const { data: categories } = await supabase
     .from("categories")
     .select("*")
@@ -403,8 +412,8 @@ bot.on("message:text", async (ctx: Context) => {
     );
   }
 
-  const jsonMatch = aiResponse.match(/\{.*\}/s);
-  let humanPart = aiResponse.replace(/\{.*\}/s, "").trim();
+  const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
+  let humanPart = aiResponse.replace(/\{[\s\S]*\}/, "").trim();
   console.log("=> Has JSON match:", !!jsonMatch);
 
   if (jsonMatch) {
@@ -445,7 +454,6 @@ bot.on("message:text", async (ctx: Context) => {
       }
 
       if (aiParsed.type === "expense") {
-        // Find category using AI's suggestion or fallback to first match
         let category = categories?.find(
           (c) => c.name.toLowerCase() === aiParsed.category.toLowerCase(),
         );
@@ -465,7 +473,6 @@ bot.on("message:text", async (ctx: Context) => {
             `❌ Maaf, saya tidak menemukan kategori "${aiParsed.category}". Bisa gunakan kategori lain?`,
           );
 
-        // 1. Insert Transaction
         await supabase.from("transactions").insert({
           family_id: member.family_id,
           category_id: category.id,
@@ -476,7 +483,6 @@ bot.on("message:text", async (ctx: Context) => {
           date: new Date().toISOString(),
         });
 
-        // 2. Update Family Balance & Budget
         const newBalance =
           Number(member.families.total_balance) - aiParsed.amount;
         const newBudget =
@@ -490,7 +496,6 @@ bot.on("message:text", async (ctx: Context) => {
           })
           .eq("id", member.family_id);
 
-        // 3. Construct Confirmation
         let alertMsg = "";
         if (newBudget <= 0) {
           alertMsg = `\n\n🚨 *Peringatan:* Budget Anda sudah habis atau terlampaui!`;
@@ -515,8 +520,7 @@ bot.on("message:text", async (ctx: Context) => {
     }
   }
 
-  // Default for normal chat or failed parse
-  return ctx.reply(aiResponse.replace(/\{.*\}/s, "").trim() || aiResponse);
+  return ctx.reply(aiResponse.replace(/\{[\s\S]*\}/, "").trim() || aiResponse);
 });
 
 // Simple in-memory cache to deduplicate Telegram update retries
@@ -537,121 +541,21 @@ function isDuplicate(updateId: number): boolean {
   return false;
 }
 
-bot.catch(async (err) => {
-  console.error(`Error while handling update ${err.ctx.update.update_id}:`);
-  const e = err.error;
-  let errMsg = "Unknown Error";
-  if (e instanceof Error) {
-    errMsg = e.message;
-  } else {
-    errMsg = String(e);
-  }
-  console.error(e);
+export async function POST(req: NextRequest) {
   try {
-    // Log to DB for debug
-    await supabase
-      .from("transactions")
-      .insert({
-        family_id: "a0a7be38-2d1b-4f9b-90f3-170cd9f5f1c6",
-        category_id: "82debb73-e9bb-4128-b3c9-f1c4318f3490",
-        amount: 0,
-        note: errMsg,
-        source: "error_log",
-        created_by: "13b6026f-9c50-4742-9904-682fce3b9206",
-      })
-      .catch(() => {});
-    await err.ctx.reply(`🚨 Terjadi kesalahan sistem: ${errMsg}`);
-  } catch (replyErr) {
-    console.error("Failed to send error message:", replyErr);
-  }
-});
-
-Deno.serve(async (req: Request) => {
-  const url = new URL(req.url);
-
-  // Reset webhook endpoint
-  if (url.searchParams.get("reset_webhook") === "true") {
-    const token = Deno.env.get("TELEGRAM_TOKEN");
-    const secret = Deno.env.get("FUNCTION_SECRET");
-    const webhookUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/telegram-bot?secret=${secret}`;
-    try {
-      // Delete old webhook
-      await fetch(
-        `https://api.telegram.org/bot${token}/deleteWebhook?drop_pending_updates=true`,
-      );
-      // Set new webhook
-      const res = await fetch(
-        `https://api.telegram.org/bot${token}/setWebhook`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: webhookUrl }),
-        },
-      );
-      const data = await res.json();
-      return new Response(
-        JSON.stringify({ webhook_url: webhookUrl, result: data }),
-        {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        },
-      );
-    } catch (err) {
-      return new Response(JSON.stringify({ error: err.message }), {
-        status: 500,
-      });
+    // Verify Telegram Secret Token
+    const secretToken = req.headers.get("x-telegram-bot-api-secret-token");
+    if (secretToken !== TELEGRAM_SECRET_TOKEN) {
+      console.warn("Unauthorized webhook access attempt");
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-  }
 
-  if (url.searchParams.get("webhook_info") === "true") {
-    const token = Deno.env.get("TELEGRAM_TOKEN");
-    try {
-      const res = await fetch(
-        `https://api.telegram.org/bot${token}/getWebhookInfo`,
-      );
-      const data = await res.json();
-      return new Response(JSON.stringify(data), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    } catch (err) {
-      return new Response(err.message, { status: 500 });
-    }
-  }
-
-  if (url.searchParams.get("test_send") === "true") {
-    const token = Deno.env.get("TELEGRAM_TOKEN");
-    const chatId = url.searchParams.get("chat_id") || "1299663907";
-    try {
-      const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text: "Pesan percobaan langsung dari API Telegram! (Ping success)"
-        })
-      });
-      const data = await res.json();
-      return new Response(JSON.stringify(data), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    } catch (err) {
-      return new Response(JSON.stringify({ error: err.message }), { status: 500 });
-    }
-  }
-
-  if (url.searchParams.get("secret") !== Deno.env.get("FUNCTION_SECRET")) {
-    return new Response("unauthorized", { status: 403 });
-  }
-
-  try {
     const update = await req.json();
     const updateId = update?.update_id;
 
     if (updateId) {
       if (isDuplicate(updateId)) {
-        return new Response("ok", { status: 200 });
+        return NextResponse.json({ ok: true });
       }
     }
 
@@ -661,9 +565,9 @@ Deno.serve(async (req: Request) => {
       console.error("Unhandled error in handleUpdate:", err);
     }
 
-    return new Response("ok", { status: 200 });
-  } catch (err) {
-    console.error("Error handling request:", err);
-    return new Response("ok", { status: 200 });
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error("Webhook route error:", error);
+    return NextResponse.json({ ok: true }); // Always return 200 to prevent Telegram retry spam
   }
-});
+}
