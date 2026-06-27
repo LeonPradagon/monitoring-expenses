@@ -16,7 +16,9 @@ export const POST = async (req: Request) => {
     return new Response(JSON.stringify({ success: true }), { status: 200 });
   } catch (err: any) {
     console.error("WEBHOOK CRITICAL ERROR:", err);
-    return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+    // Selalu return 200 ke Telegram meskipun ada error internal bot,
+    // agar Telegram tidak stuck melakukan retry berulang kali untuk pesan yang sama.
+    return new Response(JSON.stringify({ error: err.message }), { status: 200 });
   }
 };
 
