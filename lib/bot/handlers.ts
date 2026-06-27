@@ -16,6 +16,12 @@ export function setupHandlers(bot: Bot) {
     }
 
     try {
+      // Check if valid user in db
+      const { data: user, error: userErr } = await supabaseAdmin.auth.admin.getUserById(userId);
+      if (userErr || !user) {
+        return ctx.reply("Gagal menghubungkan. User tidak ditemukan.");
+      }
+
       const { data: existing, error: fetchErr } = await supabaseAdmin
         .from('user_settings')
         .select('*')
@@ -44,7 +50,8 @@ export function setupHandlers(bot: Bot) {
       );
     } catch (error: any) {
       console.error("Link error:", error);
-      await ctx.reply("❌ Gagal menghubungkan akun. Error: " + (error.message || "Unknown error"));
+      // Ensure we don't throw UUID validation errors up to Grammy
+      await ctx.reply("❌ Gagal menghubungkan akun. ID pengguna tidak valid atau terjadi error sistem.");
     }
   });
 
