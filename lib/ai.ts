@@ -1,3 +1,5 @@
+import axios from 'axios';
+
 export async function parseNaturalLanguage(text: string, context: any) {
   const systemPrompt = `
 Kamu adalah asisten keuangan personal bernama Nanalys untuk aplikasi MoneyTrack Pro.
@@ -56,22 +58,24 @@ Contoh JSON conversational:
 `;
 
   try {
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        "model": "google/gemma-4-31b-it:free",
-        "messages": [
+    const response = await axios.post(
+      "https://openrouter.ai/api/v1/chat/completions",
+      {
+        model: "google/gemma-4-31b-it:free",
+        messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: text }
         ]
-      })
-    });
+      },
+      {
+        headers: {
+          "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json"
+        }
+      }
+    );
 
-    const result = await response.json();
+    const result = response.data;
     if (result.error) {
       console.error("OpenRouter API Error:", result.error);
       return null;
@@ -82,8 +86,8 @@ Contoh JSON conversational:
     // Attempt to parse the content as JSON. Sometimes AI returns markdown code blocks.
     const jsonStr = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     return JSON.parse(jsonStr);
-  } catch (error) {
-    console.error("AI Parsing Error:", error);
+  } catch (error: any) {
+    console.error("AI Parsing Error:", error.response?.data || error.message);
     return null;
   }
 }
