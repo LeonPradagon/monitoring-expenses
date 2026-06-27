@@ -4,7 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 
 export const maxDuration = 60; // Prevent Vercel from killing the function early
 
-const bot = new Bot(process.env.TELEGRAM_SECRET_TOKEN || "");
+const bot = new Bot(process.env.TELEGRAM_TOKEN || process.env.TELEGRAM_SECRET_TOKEN || "");
 
 // Admin supabase client for webhook (bypasses RLS)
 // This REQUIRES SUPABASE_SERVICE_ROLE_KEY in .env
@@ -219,4 +219,13 @@ bot.on("message:text", async (ctx) => {
   }
 });
 
-export const POST = webhookCallback(bot, "std/http");
+const handler = webhookCallback(bot, "std/http");
+
+export const POST = async (req: Request) => {
+  try {
+    return await handler(req);
+  } catch (err: any) {
+    console.error("WEBHOOK CRITICAL ERROR:", err);
+    return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+  }
+};
