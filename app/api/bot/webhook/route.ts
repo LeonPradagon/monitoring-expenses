@@ -118,7 +118,10 @@ bot.on("message:text", async (ctx) => {
 
   if (parsed.intent === "create_transaction") {
     try {
-      const accountId = parsed.account_id || context.accounts[0]?.id;
+      let accountId = parsed.account_id;
+      if (!context.accounts.some(a => a.id === accountId)) {
+        accountId = context.accounts[0]?.id;
+      }
       if (!accountId) throw new Error("No account found");
 
       // Calculate new balance
@@ -165,7 +168,10 @@ bot.on("message:text", async (ctx) => {
 
   if (parsed.intent === "update_balance") {
     try {
-      const accountId = parsed.account_id || context.accounts[0]?.id;
+      let accountId = parsed.account_id;
+      if (!context.accounts.some(a => a.id === accountId)) {
+        accountId = context.accounts[0]?.id;
+      }
       if (!accountId) throw new Error("No account found");
 
       const { data: accountData } = await supabaseAdmin.from('accounts').select('balance, name').eq('id', accountId).single();
