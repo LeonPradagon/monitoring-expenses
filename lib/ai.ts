@@ -87,7 +87,13 @@ Contoh JSON conversational:
     const jsonStr = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     return JSON.parse(jsonStr);
   } catch (error: any) {
-    console.error("AI Parsing Error:", error.response?.data || error.message);
-    return null;
+    const errorData = error.response?.data || error.message;
+    console.error("AI Parsing Error:", errorData);
+    
+    if (error.response?.status === 429) {
+      return { intent: "error", message: "Maaf, sistem AI sedang sangat sibuk (Rate Limit). Coba lagi dalam beberapa saat ya! 🚀" };
+    }
+    
+    return { intent: "error", message: "Maaf, terjadi gangguan pada sistem AI Nanalys. Coba sampaikan dengan lebih jelas ya!" };
   }
 }

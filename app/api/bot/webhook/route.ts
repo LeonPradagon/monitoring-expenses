@@ -108,6 +108,10 @@ bot.on("message:text", async (ctx) => {
     return ctx.reply("Maaf, Nanalys tidak mengerti maksudmu. Coba sampaikan dengan lebih jelas ya!");
   }
 
+  if (parsed.intent === "error") {
+    return ctx.reply(parsed.message || "Terjadi kesalahan sistem AI.");
+  }
+
   if (parsed.intent === "conversational") {
     return ctx.reply(parsed.response_message || "Maaf, aku nggak ngerti maksudmu.");
   }
