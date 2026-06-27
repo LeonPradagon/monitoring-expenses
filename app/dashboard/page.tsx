@@ -14,6 +14,8 @@ import { CategoryManager } from "@/components/CategoryManager";
 import { AccountManager } from "@/components/AccountManager";
 import { getDashboardData } from "@/lib/actions";
 
+import BudgetWidget from "@/components/BudgetWidget";
+
 export default function DashboardPage() {
   const [user, setUser] = useState<any>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
@@ -191,6 +193,7 @@ export default function DashboardPage() {
                     }
                   }} 
                 />
+                <BudgetWidget />
               </div>
             </div>
           </>

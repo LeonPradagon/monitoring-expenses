@@ -153,11 +153,50 @@ export function setupHandlers(bot: Bot) {
         const amountStr = formatter.format(amount);
         const typeStr = parsed.type === 'income' ? 'Pemasukan 📈' : 'Pengeluaran 📉';
         
+        let budgetAlertMsg = "";
+        
+        // Real-time Budget Check
+        if (parsed.type === 'expense' && parsed.category_id) {
+          const { data: budget } = await supabaseAdmin
+            .from('budgets')
+            .select('amount, alert_at, name')
+            .eq('user_id', userId)
+            .eq('category_id', parsed.category_id)
+            .single();
+            
+          if (budget) {
+            const date = new Date();
+            const startOfMonth = new Date(date.getFullYear(), date.getMonth(), 1).toISOString().split('T')[0];
+            const endOfMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).toISOString().split('T')[0];
+            
+            // Calculate total expenses for this category in the current month
+            const { data: expenses } = await supabaseAdmin
+              .from('transactions')
+              .select('amount')
+              .eq('user_id', userId)
+              .eq('category_id', parsed.category_id)
+              .eq('type', 'expense')
+              .gte('date', startOfMonth)
+              .lte('date', endOfMonth);
+              
+            const totalSpent = (expenses || []).reduce((sum, tx) => sum + Number(tx.amount), 0);
+            const budgetAmount = Number(budget.amount);
+            const alertThreshold = budget.alert_at ? Number(budget.alert_at) / 100 : 0.8;
+            
+            if (totalSpent >= budgetAmount) {
+              budgetAlertMsg = `\n\n🚨 *PERINGATAN*: Pengeluaran "${budget.name}" bulan ini (${formatter.format(totalSpent)}) sudah *MELEBIHI* budget (${formatter.format(budgetAmount)})! Hati-hati ya!`;
+            } else if (totalSpent >= budgetAmount * alertThreshold) {
+              budgetAlertMsg = `\n\n⚠️ *Peringatan*: Sisa budget "${budget.name}" bulan ini tinggal *${formatter.format(budgetAmount - totalSpent)}*. Yuk mulai hemat!`;
+            }
+          }
+        }
+        
         return ctx.reply(
           `✅ *Transaksi Berhasil Dicatat!*\n\n` +
           `📝 *Keterangan*: ${parsed.description}\n` +
           `💵 *Nominal*: ${amountStr}\n` +
-          `🏷️ *Tipe*: ${typeStr}\n\n` +
+          `🏷️ *Tipe*: ${typeStr}` +
+          budgetAlertMsg + `\n\n` +
           `Semangat terus atur keuangannya! 🚀`,
           {
             parse_mode: "Markdown",
@@ -256,6 +295,53 @@ export function setupHandlers(bot: Bot) {
       } catch (error) {
         console.error("Create account error:", error);
         return ctx.reply("❌ Gagal membuat akun. Terjadi kesalahan sistem.");
+      }
+    }
+
+    if (parsed.intent === "set_budget") {
+      try {
+        if (!parsed.category_id) {
+          return ctx.reply("❌ Kategori tidak ditemukan. Silakan sebutkan nama kategori yang jelas untuk budget ini (misal: 'makanan', 'transportasi').");
+        }
+        
+        const category = context.categories.find((c: any) => c.id === parsed.category_id);
+        const amount = parseFloat(parsed.amount);
+        const period = parsed.period || "monthly";
+        const name = `Budget ${category?.name || "Kategori"}`;
+        
+        // Cek apakah sudah ada budget untuk kategori ini
+        const { data: existingBudget } = await supabaseAdmin
+          .from('budgets')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('category_id', parsed.category_id)
+          .single();
+          
+        if (existingBudget) {
+          // Update existing
+          await supabaseAdmin.from('budgets').update({ amount, period }).eq('id', existingBudget.id);
+        } else {
+          // Insert new
+          await supabaseAdmin.from('budgets').insert({
+            user_id: userId,
+            category_id: parsed.category_id,
+            name: name,
+            amount: amount,
+            period: period
+          });
+        }
+        
+        const formatter = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });
+        return ctx.reply(
+          `✅ *Budget Berhasil Ditetapkan!*\n\n` +
+          `📊 *Kategori*: ${category?.name || "Kategori"}\n` +
+          `💰 *Anggaran*: ${formatter.format(amount)} / ${period === 'monthly' ? 'Bulan' : 'Minggu'}\n\n` +
+          `Saya akan mengawasinya. Gunakan uangmu dengan bijak! 💼`,
+          { parse_mode: "Markdown" }
+        );
+      } catch (error) {
+        console.error("Set budget error:", error);
+        return ctx.reply("❌ Gagal mengatur budget. Terjadi kesalahan sistem.");
       }
     }
   });
