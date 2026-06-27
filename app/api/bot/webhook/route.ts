@@ -19,22 +19,29 @@ bot.command("start", async (ctx) => {
   }
 
   try {
-    const { data: existing } = await supabaseAdmin
+    const { data: existing, error: fetchErr } = await supabaseAdmin
       .from('user_settings')
       .select('*')
       .eq('user_id', userId)
       .maybeSingle();
     
+    if (fetchErr) throw fetchErr;
+    
+    // Clear any existing user that might have this chat ID to avoid unique constraint violations
+    await supabaseAdmin.from('user_settings').update({ telegram_chat_id: null }).eq('telegram_chat_id', ctx.chat.id.toString());
+    
     if (existing) {
-      await supabaseAdmin.from('user_settings').update({ telegram_chat_id: ctx.chat.id.toString() }).eq('user_id', userId);
+      const { error: updateErr } = await supabaseAdmin.from('user_settings').update({ telegram_chat_id: ctx.chat.id.toString() }).eq('user_id', userId);
+      if (updateErr) throw updateErr;
     } else {
-      await supabaseAdmin.from('user_settings').insert({ user_id: userId, telegram_chat_id: ctx.chat.id.toString() });
+      const { error: insertErr } = await supabaseAdmin.from('user_settings').insert({ user_id: userId, telegram_chat_id: ctx.chat.id.toString() });
+      if (insertErr) throw insertErr;
     }
 
     await ctx.reply("✅ Akun Telegram Anda berhasil dihubungkan ke MoneyTrack Pro!");
-  } catch (error) {
-    console.error(error);
-    await ctx.reply("❌ Gagal menghubungkan akun. Pastikan ID valid atau jalankan dari Web.");
+  } catch (error: any) {
+    console.error("Link error:", error);
+    await ctx.reply("❌ Gagal menghubungkan akun. Error: " + (error.message || "Unknown error"));
   }
 });
 
