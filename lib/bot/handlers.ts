@@ -223,5 +223,40 @@ export function setupHandlers(bot: Bot) {
         return ctx.reply("❌ Gagal memperbarui saldo. Terjadi kesalahan sistem.");
       }
     }
+
+    if (parsed.intent === "create_account") {
+      try {
+        const name = parsed.name || "Akun Baru";
+        const type = parsed.type || "cash";
+        const initialBalance = parseFloat(parsed.balance || 0);
+        
+        // Define colors/icons based on type
+        const typeColors: Record<string, string> = { bank: "blue", ewallet: "green", cash: "orange", credit: "red" };
+        const typeIcons: Record<string, string> = { bank: "building-columns", ewallet: "wallet", cash: "money-bill", credit: "credit-card" };
+        
+        const { error: insertErr } = await supabaseAdmin.from('accounts').insert({
+          user_id: userId,
+          name: name,
+          type: type,
+          balance: initialBalance,
+          color: typeColors[type] || "blue",
+          icon: typeIcons[type] || "wallet"
+        });
+        
+        if (insertErr) throw insertErr;
+        
+        const formatter = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });
+        return ctx.reply(
+          `✅ *Akun "${name}" Berhasil Dibuat!*\n\n` +
+          `💳 *Tipe*: ${type}\n` +
+          `💰 *Saldo Awal*: ${formatter.format(initialBalance)}\n\n` +
+          `Sekarang kamu bisa mencatat transaksi ke akun ini!`,
+          { parse_mode: "Markdown" }
+        );
+      } catch (error) {
+        console.error("Create account error:", error);
+        return ctx.reply("❌ Gagal membuat akun. Terjadi kesalahan sistem.");
+      }
+    }
   });
 }
