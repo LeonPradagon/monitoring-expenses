@@ -42,11 +42,11 @@ export function setupHandlers(bot: Bot) {
       }
 
       await ctx.reply(
-        "✅ *Akun Telegram Anda berhasil dihubungkan ke MoneyTrack Pro!*\n\n" +
+        "✅ <b>Akun Telegram Anda berhasil dihubungkan ke MoneyTrack Pro!</b>\n\n" +
         "Mulai sekarang, Anda bisa mencatat transaksi langsung dari sini. Ketik aja:\n" +
-        "_\"Beli kopi 25rb pakai gopay\"_\n\n" +
+        "<i>\"Beli kopi 25rb pakai gopay\"</i>\n\n" +
         "Ketik /bantuan untuk melihat panduan lengkapnya.",
-        { parse_mode: "Markdown" }
+        { parse_mode: "HTML" }
       );
     } catch (error: any) {
       console.error("Link error:", error);
@@ -68,14 +68,14 @@ export function setupHandlers(bot: Bot) {
     // /bantuan command
     if (ctx.message?.text === "/bantuan" || ctx.message?.text === "/help") {
       return ctx.reply(
-        "👋 *Bantuan Nanalys*\n\n" +
+        "👋 <b>Bantuan Nanalys</b>\n\n" +
         "Ketik aja transaksimu pakai bahasa sehari-hari. Contoh:\n" +
-        "• _Makan siang 50rb pakai BCA_\n" +
-        "• _Gaji masuk 5jt ke Mandiri_\n" +
-        "• _Beli kopi 25k_\n\n" +
+        "• <i>Makan siang 50rb pakai BCA</i>\n" +
+        "• <i>Gaji masuk 5jt ke Mandiri</i>\n" +
+        "• <i>Beli kopi 25k</i>\n\n" +
         "Nanalys bakal otomatis catat ke akun & kategori yang pas!",
         {
-          parse_mode: "Markdown",
+          parse_mode: "HTML",
           reply_markup: new InlineKeyboard().url("Lihat Dashboard", process.env.NEXT_PUBLIC_APP_URL || "https://monitoring-expenses.vercel.app")
         }
       );
@@ -86,9 +86,9 @@ export function setupHandlers(bot: Bot) {
       const { data: accounts } = await supabaseAdmin.from('accounts').select('*').eq('user_id', userId);
       if (!accounts || accounts.length === 0) return ctx.reply("Belum ada akun keuangan yang terdaftar.");
       
-      const balances = accounts.map(a => `💰 *${a.name}*: Rp ${Number(a.balance).toLocaleString('id-ID')}`).join('\n');
-      return ctx.reply(`*Saldo Akun Anda:*\n\n${balances}`, {
-        parse_mode: "Markdown",
+      const balances = accounts.map(a => `💰 <b>${a.name}</b>: Rp ${Number(a.balance).toLocaleString('id-ID')}`).join('\n');
+      return ctx.reply(`<b>Saldo Akun Anda:</b>\n\n${balances}`, {
+        parse_mode: "HTML",
         reply_markup: new InlineKeyboard().url("Cek Detail di Web", process.env.NEXT_PUBLIC_APP_URL || "https://monitoring-expenses.vercel.app")
       });
     }
@@ -199,22 +199,22 @@ export function setupHandlers(bot: Bot) {
             const alertThreshold = budget.alert_at ? Number(budget.alert_at) / 100 : 0.8;
             
             if (totalSpent >= budgetAmount) {
-              budgetAlertMsg = `\n\n🚨 *PERINGATAN*: Pengeluaran "${budget.name}" bulan ini (${formatter.format(totalSpent)}) sudah *MELEBIHI* budget (${formatter.format(budgetAmount)})! Hati-hati ya!`;
+              budgetAlertMsg = `\n\n🚨 <b>PERINGATAN</b>: Pengeluaran "${budget.name}" bulan ini (${formatter.format(totalSpent)}) sudah <b>MELEBIHI</b> budget (${formatter.format(budgetAmount)})! Hati-hati ya!`;
             } else if (totalSpent >= budgetAmount * alertThreshold) {
-              budgetAlertMsg = `\n\n⚠️ *Peringatan*: Sisa budget "${budget.name}" bulan ini tinggal *${formatter.format(budgetAmount - totalSpent)}*. Yuk mulai hemat!`;
+              budgetAlertMsg = `\n\n⚠️ <b>Peringatan</b>: Sisa budget "${budget.name}" bulan ini tinggal <b>${formatter.format(budgetAmount - totalSpent)}</b>. Yuk mulai hemat!`;
             }
           }
         }
         
         return ctx.reply(
-          `✅ *Transaksi Berhasil Dicatat!*\n\n` +
-          `📝 *Keterangan*: ${parsed.description}\n` +
-          `💵 *Nominal*: ${amountStr}\n` +
-          `🏷️ *Tipe*: ${typeStr}` +
+          `✅ <b>Transaksi Berhasil Dicatat!</b>\n\n` +
+          `📝 <b>Keterangan</b>: ${parsed.description}\n` +
+          `💵 <b>Nominal</b>: ${amountStr}\n` +
+          `🏷️ <b>Tipe</b>: ${typeStr}` +
           budgetAlertMsg + `\n\n` +
           `Semangat terus atur keuangannya! 🚀`,
           {
-            parse_mode: "Markdown",
+            parse_mode: "HTML",
             reply_markup: new InlineKeyboard().url("Cek di Web", process.env.NEXT_PUBLIC_APP_URL || "https://monitoring-expenses.vercel.app")
           }
         );
@@ -264,11 +264,11 @@ export function setupHandlers(bot: Bot) {
         const sign = difference > 0 ? '+' : '-';
         
         return ctx.reply(
-          `✅ *Saldo ${accountData?.name} Berhasil Diperbarui!*\n\n` +
-          `💰 *Saldo Akhir*: ${formatter.format(targetBalance)}\n` +
-          `📝 *(Penyesuaian Otomatis: ${sign}${formatter.format(txAmount)})*\n`,
+          `✅ <b>Saldo ${accountData?.name} Berhasil Diperbarui!</b>\n\n` +
+          `💰 <b>Saldo Akhir</b>: ${formatter.format(targetBalance)}\n` +
+          `📝 <i>(Penyesuaian Otomatis: ${sign}${formatter.format(txAmount)})</i>\n`,
           {
-            parse_mode: "Markdown",
+            parse_mode: "HTML",
             reply_markup: new InlineKeyboard().url("Cek di Web", process.env.NEXT_PUBLIC_APP_URL || "https://monitoring-expenses.vercel.app")
           }
         );
@@ -301,11 +301,11 @@ export function setupHandlers(bot: Bot) {
         
         const formatter = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });
         return ctx.reply(
-          `✅ *Akun "${name}" Berhasil Dibuat!*\n\n` +
-          `💳 *Tipe*: ${type}\n` +
-          `💰 *Saldo Awal*: ${formatter.format(initialBalance)}\n\n` +
+          `✅ <b>Akun "${name}" Berhasil Dibuat!</b>\n\n` +
+          `💳 <b>Tipe</b>: ${type}\n` +
+          `💰 <b>Saldo Awal</b>: ${formatter.format(initialBalance)}\n\n` +
           `Sekarang kamu bisa mencatat transaksi ke akun ini!`,
-          { parse_mode: "Markdown" }
+          { parse_mode: "HTML" }
         );
       } catch (error) {
         console.error("Create account error:", error);
@@ -365,11 +365,11 @@ export function setupHandlers(bot: Bot) {
         
         const formatter = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });
         return ctx.reply(
-          `✅ *Budget Berhasil Ditetapkan!*\n\n` +
-          `📊 *Kategori*: ${categoryName}\n` +
-          `💰 *Anggaran*: ${formatter.format(amount)} / ${period === 'monthly' ? 'Bulan' : 'Minggu'}\n\n` +
+          `✅ <b>Budget Berhasil Ditetapkan!</b>\n\n` +
+          `📊 <b>Kategori</b>: ${categoryName}\n` +
+          `💰 <b>Anggaran</b>: ${formatter.format(amount)} / ${period === 'monthly' ? 'Bulan' : 'Minggu'}\n\n` +
           `Saya akan mengawasinya. Gunakan uangmu dengan bijak! 💼`,
-          { parse_mode: "Markdown" }
+          { parse_mode: "HTML" }
         );
       } catch (error) {
         console.error("Set budget error:", error);

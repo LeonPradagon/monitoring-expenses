@@ -9,11 +9,11 @@ if (!token) {
 
 export const bot = new Bot(token);
 
-bot.catch((err) => {
+bot.catch(async (err) => {
   const ctx = err.ctx;
   console.error(`Error while handling update ${ctx.update.update_id}:`, err.error);
   // Coba kirim pesan error ke user agar mereka tahu sistem sedang gangguan
-  ctx.reply("❌ Maaf, sistem bot mengalami gangguan internal (Vercel/Database Error). Silakan hubungi admin.").catch(() => {});
+  await ctx.reply("❌ Maaf, sistem bot mengalami gangguan internal (Vercel/Database Error). Silakan hubungi admin.").catch(() => {});
 });
 
 // Setup handlers
