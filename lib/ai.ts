@@ -119,16 +119,30 @@ IMPORTANT: OUTPUT ONLY THE JSON OBJECT. DO NOT OUTPUT ANY THOUGHT PROCESS OR EXP
     }
     
     // Extract JSON block in case model outputs extra text
-    let jsonStr = content.replace(/```json\n?/gi, '').replace(/```\n?/g, '').trim();
+    let jsonStr = "";
     
-    const firstBrace = jsonStr.indexOf('{');
-    const lastBrace = jsonStr.lastIndexOf('}');
-    
-    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace >= firstBrace) {
-      jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
+    // 1. Try markdown code block
+    const codeBlockMatch = content.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/i);
+    if (codeBlockMatch) {
+      try { return JSON.parse(codeBlockMatch[1]); } catch (e) {}
     }
     
-    return JSON.parse(jsonStr);
+    // 2. Try first { to last }
+    const firstBrace = content.indexOf('{');
+    const lastBrace = content.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace >= firstBrace) {
+      try { return JSON.parse(content.substring(firstBrace, lastBrace + 1)); } catch (e) {}
+    }
+    
+    // 3. Fallback: match any { ... } non-greedily and try to parse the last valid one
+    const matches = content.match(/\{[\s\S]*?\}/g);
+    if (matches) {
+       for (let i = matches.length - 1; i >= 0; i--) {
+          try { return JSON.parse(matches[i]); } catch (e) {}
+       }
+    }
+    
+    throw new Error("No valid JSON found in AI response");
     
   } catch (error: any) {
     const errorData = error.response?.data || error.message;
