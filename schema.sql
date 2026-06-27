@@ -1,8 +1,7 @@
--- Drop existing tables if needed (WARNING: this deletes data)
--- DROP TABLE IF EXISTS debt_payments, debts, recurring_schedules, budgets, transactions, categories, accounts, user_settings, ai_conversations CASCADE;
+DROP TABLE IF EXISTS debt_payments, debts, recurring_schedules, budgets, transactions, categories, accounts, user_settings, ai_conversations CASCADE;
 
 -- 1. accounts
-CREATE TABLE IF NOT EXISTS accounts (
+CREATE TABLE accounts (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id     UUID NOT NULL REFERENCES auth.users(id),
   name        TEXT NOT NULL,                    
@@ -18,7 +17,7 @@ CREATE TABLE IF NOT EXISTS accounts (
 );
 
 -- 2. categories
-CREATE TABLE IF NOT EXISTS categories (
+CREATE TABLE categories (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id     UUID REFERENCES auth.users(id),   
   name        TEXT NOT NULL,
@@ -31,7 +30,7 @@ CREATE TABLE IF NOT EXISTS categories (
 );
 
 -- 3. transactions
-CREATE TABLE IF NOT EXISTS transactions (
+CREATE TABLE transactions (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id         UUID NOT NULL REFERENCES auth.users(id),
   account_id      UUID NOT NULL REFERENCES accounts(id),
@@ -60,13 +59,12 @@ CREATE TABLE IF NOT EXISTS transactions (
   updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Index penting
-CREATE INDEX IF NOT EXISTS idx_transactions_user_date ON transactions(user_id, date DESC);
-CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category_id);
-CREATE INDEX IF NOT EXISTS idx_transactions_account ON transactions(account_id);
+CREATE INDEX idx_transactions_user_date ON transactions(user_id, date DESC);
+CREATE INDEX idx_transactions_category ON transactions(category_id);
+CREATE INDEX idx_transactions_account ON transactions(account_id);
 
 -- 4. budgets
-CREATE TABLE IF NOT EXISTS budgets (
+CREATE TABLE budgets (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id       UUID NOT NULL REFERENCES auth.users(id),
   category_id   UUID REFERENCES categories(id),
@@ -81,7 +79,7 @@ CREATE TABLE IF NOT EXISTS budgets (
 );
 
 -- 5. user_settings
-CREATE TABLE IF NOT EXISTS user_settings (
+CREATE TABLE user_settings (
   user_id           UUID PRIMARY KEY REFERENCES auth.users(id),
   telegram_chat_id  TEXT UNIQUE,         
   base_currency     TEXT DEFAULT 'IDR',

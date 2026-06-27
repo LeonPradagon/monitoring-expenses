@@ -117,8 +117,8 @@ export async function GET(req: Request) {
         transactions.forEach(t => {
           txSheet.addRow({
             date: t.date,
-            account: t.accounts?.name || '-',
-            category: t.categories?.name || '-',
+            account: (t.accounts as any)?.name || '-',
+            category: (t.categories as any)?.name || '-',
             type: t.type === 'income' ? 'Pemasukan' : (t.type === 'expense' ? 'Pengeluaran' : 'Transfer'),
             desc: t.description || '-',
             amount: Number(t.amount)
