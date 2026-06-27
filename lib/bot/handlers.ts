@@ -137,10 +137,25 @@ export function setupHandlers(bot: Bot) {
 
         await supabaseAdmin.from('accounts').update({ balance: currentBalance }).eq('id', accountId);
 
+        let categoryId = parsed.category_id;
+        
+        if (!categoryId && parsed.category_name) {
+          // Auto-create category if AI provided a name but no ID
+          const { data: newCategory, error: createCatErr } = await supabaseAdmin
+            .from('categories')
+            .insert({ user_id: userId, name: parsed.category_name, type: parsed.type === 'income' ? 'income' : 'expense' })
+            .select()
+            .single();
+            
+          if (!createCatErr && newCategory) {
+            categoryId = newCategory.id;
+          }
+        }
+
         await supabaseAdmin.from('transactions').insert({
           user_id: userId,
           account_id: accountId,
-          category_id: parsed.category_id || null,
+          category_id: categoryId || null,
           type: parsed.type,
           amount: amount,
           description: parsed.description,
@@ -156,12 +171,12 @@ export function setupHandlers(bot: Bot) {
         let budgetAlertMsg = "";
         
         // Real-time Budget Check
-        if (parsed.type === 'expense' && parsed.category_id) {
+        if (parsed.type === 'expense' && categoryId) {
           const { data: budget } = await supabaseAdmin
             .from('budgets')
             .select('amount, alert_at, name')
             .eq('user_id', userId)
-            .eq('category_id', parsed.category_id)
+            .eq('category_id', categoryId)
             .single();
             
           if (budget) {
@@ -174,7 +189,7 @@ export function setupHandlers(bot: Bot) {
               .from('transactions')
               .select('amount')
               .eq('user_id', userId)
-              .eq('category_id', parsed.category_id)
+              .eq('category_id', categoryId)
               .eq('type', 'expense')
               .gte('date', startOfMonth)
               .lte('date', endOfMonth);
@@ -300,21 +315,38 @@ export function setupHandlers(bot: Bot) {
 
     if (parsed.intent === "set_budget") {
       try {
-        if (!parsed.category_id) {
-          return ctx.reply("❌ Kategori tidak ditemukan. Silakan sebutkan nama kategori yang jelas untuk budget ini (misal: 'makanan', 'transportasi').");
+        let categoryId = parsed.category_id;
+        let categoryName = parsed.category_name;
+        
+        if (!categoryId) {
+          if (!categoryName) {
+            return ctx.reply("❌ Kategori tidak ditemukan. Silakan sebutkan nama kategori yang jelas untuk budget ini (misal: 'makanan', 'transportasi').");
+          }
+          // Auto-create category if it doesn't exist
+          const { data: newCategory, error: createCatErr } = await supabaseAdmin
+            .from('categories')
+            .insert({ user_id: userId, name: categoryName, type: 'expense' })
+            .select()
+            .single();
+            
+          if (createCatErr || !newCategory) throw new Error("Failed to create category");
+          categoryId = newCategory.id;
+          categoryName = newCategory.name;
+        } else {
+          const category = context.categories.find((c: any) => c.id === categoryId);
+          categoryName = category?.name || "Kategori";
         }
         
-        const category = context.categories.find((c: any) => c.id === parsed.category_id);
         const amount = parseFloat(parsed.amount);
         const period = parsed.period || "monthly";
-        const name = `Budget ${category?.name || "Kategori"}`;
+        const budgetName = `Budget ${categoryName}`;
         
         // Cek apakah sudah ada budget untuk kategori ini
         const { data: existingBudget } = await supabaseAdmin
           .from('budgets')
           .select('id')
           .eq('user_id', userId)
-          .eq('category_id', parsed.category_id)
+          .eq('category_id', categoryId)
           .single();
           
         if (existingBudget) {
@@ -324,8 +356,8 @@ export function setupHandlers(bot: Bot) {
           // Insert new
           await supabaseAdmin.from('budgets').insert({
             user_id: userId,
-            category_id: parsed.category_id,
-            name: name,
+            category_id: categoryId,
+            name: budgetName,
             amount: amount,
             period: period
           });
@@ -334,7 +366,7 @@ export function setupHandlers(bot: Bot) {
         const formatter = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });
         return ctx.reply(
           `✅ *Budget Berhasil Ditetapkan!*\n\n` +
-          `📊 *Kategori*: ${category?.name || "Kategori"}\n` +
+          `📊 *Kategori*: ${categoryName}\n` +
           `💰 *Anggaran*: ${formatter.format(amount)} / ${period === 'monthly' ? 'Bulan' : 'Minggu'}\n\n` +
           `Saya akan mengawasinya. Gunakan uangmu dengan bijak! 💼`,
           { parse_mode: "Markdown" }

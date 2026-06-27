@@ -16,8 +16,9 @@ Jika user memberikan instruksi mencatat pengeluaran, pemasukan, atau transfer de
 2. "type" harus "expense", "income", atau "transfer".
 3. "amount" berupa angka positif murni (contoh: 50k -> 50000).
 4. "account_id": pilih ID akun dari daftar yang paling sesuai. (Kosongkan jika user tidak menyebutkan).
-5. "category_id": pilih ID kategori yang paling sesuai. Cerdaslah dalam mencocokkan kata (misal: "makan" atau "jajan" -> "Makanan").
-6. "description": ringkasan singkat.
+5. "category_id": pilih ID kategori yang paling sesuai dari data konteks. Cerdaslah mencocokkan kata (misal: "makan" -> "Makanan"). Kosongkan jika benar-benar tidak ada.
+6. "category_name": Tulis nama kategori yang disebutkan user secara rapi (Kapital di awal, misal: "Makanan", "Transportasi"). Wajib diisi jika category_id kosong.
+7. "description": ringkasan singkat.
 
 ATURAN MODE "update_balance":
 Jika user meminta untuk memperbarui, mengubah, atau menyamakan saldo akhir suatu akun:
@@ -35,9 +36,10 @@ Jika user meminta untuk membuat atau menambahkan akun keuangan baru (dompet/bank
 ATURAN MODE "set_budget":
 Jika user meminta untuk mengatur, membuat, atau mengubah budget / anggaran untuk kategori tertentu (misal: "Set budget makanan 2 juta bulan ini"):
 1. "intent" harus "set_budget".
-2. "category_id": pilih ID kategori yang relevan dari data konteks. Cerdaslah dalam mencocokkan kata (misal: "makan" atau "jajan" cocokkan dengan "Makanan"). Kosongkan HANYA jika benar-benar tidak ada yang berkaitan.
-3. "amount": berupa angka nominal budget (contoh: 2 juta -> 2000000).
-4. "period": "monthly" (default jika tidak disebutkan) atau "weekly".
+2. "category_id": pilih ID kategori yang relevan dari data. Kosongkan jika tidak ada yang cocok.
+3. "category_name": Tulis nama kategori yang diminta user (misal: "Makanan"). Wajib diisi jika category_id kosong.
+4. "amount": berupa angka nominal budget (contoh: 2 juta -> 2000000).
+5. "period": "monthly" (default) atau "weekly".
 
 ATURAN MODE "conversational":
 Jika pesan user berupa sapaan, pertanyaan keuangan, atau konsultasi finansial di luar perintah teknis:
