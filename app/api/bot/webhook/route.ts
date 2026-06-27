@@ -1,15 +1,22 @@
-import { webhookCallback } from "grammy";
 import { bot } from "@/lib/bot";
 
 export const maxDuration = 60; // Prevent Vercel from killing the function early
 
-const handler = webhookCallback(bot, "std/http");
+let isInitialized = false;
 
 export const POST = async (req: Request) => {
   try {
-    return await handler(req);
+    if (!isInitialized) {
+      await bot.init();
+      isInitialized = true;
+    }
+    
+    const update = await req.json();
+    await bot.handleUpdate(update);
+    return new Response(JSON.stringify({ success: true }), { status: 200 });
   } catch (err: any) {
     console.error("WEBHOOK CRITICAL ERROR:", err);
     return new Response(JSON.stringify({ error: err.message }), { status: 500 });
   }
 };
+
