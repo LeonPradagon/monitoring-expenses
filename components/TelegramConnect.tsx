@@ -12,7 +12,7 @@ export function TelegramConnect({ user }: { user: any }) {
   useEffect(() => {
     if (!user) return;
     async function checkStatus() {
-      const { data } = await supabase.from('user_settings').select('telegram_chat_id').eq('user_id', user.id).single();
+      const { data } = await supabase.from('user_settings').select('telegram_chat_id').eq('user_id', user.id).maybeSingle();
       if (data?.telegram_chat_id) {
         setIsConnected(true);
       }
@@ -32,15 +32,17 @@ export function TelegramConnect({ user }: { user: any }) {
 
   return (
     <div className="flex flex-col gap-3">
-        <Button
-          variant="outline"
-          size="sm"
-          className="border-primary/20 text-primary hover:bg-primary/10"
-          onClick={() => window.open(`https://t.me/Nanalysbot?start=${user.id}`, "_blank")}
-        >
-          <MessageSquare className="w-4 h-4 mr-2" />
-          Connect Telegram
-        </Button>
+        <a href={`https://t.me/Nanalysbot?start=${user.id}`} target="_blank" rel="noopener noreferrer">
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-primary/20 text-primary hover:bg-primary/10"
+            type="button"
+          >
+            <MessageSquare className="w-4 h-4 mr-2" />
+            Connect Telegram
+          </Button>
+        </a>
     </div>
   );
 }
