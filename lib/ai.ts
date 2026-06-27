@@ -16,7 +16,7 @@ Jika user memberikan instruksi mencatat pengeluaran, pemasukan, atau transfer de
 2. "type" harus "expense", "income", atau "transfer".
 3. "amount" berupa angka positif murni (contoh: 50k -> 50000).
 4. "account_id": pilih ID akun dari daftar yang paling sesuai. (Kosongkan jika user tidak menyebutkan).
-5. "category_id": pilih ID kategori yang paling sesuai.
+5. "category_id": pilih ID kategori yang paling sesuai. Cerdaslah dalam mencocokkan kata (misal: "makan" atau "jajan" -> "Makanan").
 6. "description": ringkasan singkat.
 
 ATURAN MODE "update_balance":
@@ -35,7 +35,7 @@ Jika user meminta untuk membuat atau menambahkan akun keuangan baru (dompet/bank
 ATURAN MODE "set_budget":
 Jika user meminta untuk mengatur, membuat, atau mengubah budget / anggaran untuk kategori tertentu (misal: "Set budget makanan 2 juta bulan ini"):
 1. "intent" harus "set_budget".
-2. "category_id": pilih ID kategori yang relevan dari data konteks. (Kosongkan jika tidak ada yang cocok).
+2. "category_id": pilih ID kategori yang relevan dari data konteks. Cerdaslah dalam mencocokkan kata (misal: "makan" atau "jajan" cocokkan dengan "Makanan"). Kosongkan HANYA jika benar-benar tidak ada yang berkaitan.
 3. "amount": berupa angka nominal budget (contoh: 2 juta -> 2000000).
 4. "period": "monthly" (default jika tidak disebutkan) atau "weekly".
 
