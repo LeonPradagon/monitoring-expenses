@@ -124,7 +124,9 @@ export function setupHandlers(bot: Bot) {
         if (!context.accounts.some(a => a.id === accountId)) {
           accountId = context.accounts[0]?.id;
         }
-        if (!accountId) throw new Error("No account found");
+        if (!accountId) {
+          return ctx.reply("❌ Belum ada akun keuangan. Silakan buat akun (seperti Dompet/Bank) terlebih dahulu di Web Dashboard MoneyTrack Pro.");
+        }
 
         // Calculate new balance
         const { data: accountData } = await supabaseAdmin.from('accounts').select('balance').eq('id', accountId).single();
@@ -174,7 +176,9 @@ export function setupHandlers(bot: Bot) {
         if (!context.accounts.some(a => a.id === accountId)) {
           accountId = context.accounts[0]?.id;
         }
-        if (!accountId) throw new Error("No account found");
+        if (!accountId) {
+          return ctx.reply("❌ Belum ada akun keuangan. Silakan buat akun (seperti Dompet/Bank) terlebih dahulu di Web Dashboard MoneyTrack Pro.");
+        }
 
         const { data: accountData } = await supabaseAdmin.from('accounts').select('balance, name').eq('id', accountId).single();
         const currentBalance = parseFloat(accountData?.balance || 0);
