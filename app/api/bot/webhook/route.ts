@@ -156,6 +156,55 @@ bot.on("message:text", async (ctx) => {
       return ctx.reply("❌ Gagal mencatat transaksi. Terjadi kesalahan pada sistem.");
     }
   }
+
+  if (parsed.intent === "update_balance") {
+    try {
+      const accountId = parsed.account_id || context.accounts[0]?.id;
+      if (!accountId) throw new Error("No account found");
+
+      const { data: accountData } = await supabaseAdmin.from('accounts').select('balance, name').eq('id', accountId).single();
+      const currentBalance = parseFloat(accountData?.balance || 0);
+      const targetBalance = parseFloat(parsed.amount);
+      const difference = targetBalance - currentBalance;
+
+      if (difference === 0) {
+        return ctx.reply(`✅ Saldo ${accountData?.name} sudah sesuai dengan Rp ${targetBalance.toLocaleString('id-ID')}.`);
+      }
+
+      const txType = difference > 0 ? 'income' : 'expense';
+      const txAmount = Math.abs(difference);
+
+      await supabaseAdmin.from('accounts').update({ balance: targetBalance }).eq('id', accountId);
+
+      await supabaseAdmin.from('transactions').insert({
+        user_id: userId,
+        account_id: accountId,
+        category_id: null,
+        type: txType,
+        amount: txAmount,
+        description: "Penyesuaian Saldo (Sistem)",
+        date: new Date().toISOString().split('T')[0],
+        source: 'telegram',
+        ai_categorized: true
+      });
+      
+      const formatter = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });
+      const sign = difference > 0 ? '+' : '-';
+      
+      return ctx.reply(
+        `✅ *Saldo ${accountData?.name} Berhasil Diperbarui!*\n\n` +
+        `💰 *Saldo Akhir*: ${formatter.format(targetBalance)}\n` +
+        `📝 *(Penyesuaian Otomatis: ${sign}${formatter.format(txAmount)})*\n`,
+        {
+          parse_mode: "Markdown",
+          reply_markup: new InlineKeyboard().url("Cek di Web", process.env.NEXT_PUBLIC_APP_URL || "https://monitoring-expenses.vercel.app")
+        }
+      );
+    } catch (error) {
+      console.error(error);
+      return ctx.reply("❌ Gagal memperbarui saldo. Terjadi kesalahan sistem.");
+    }
+  }
 });
 
 export const POST = webhookCallback(bot, "std/http");
