@@ -61,15 +61,15 @@ Contoh JSON conversational:
     const response = await axios.post(
       "https://integrate.api.nvidia.com/v1/chat/completions",
       {
-        model: "deepseek-ai/deepseek-v4-pro",
+        model: "openai/gpt-oss-120b",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: text }
         ],
         temperature: 1,
-        top_p: 0.95,
-        max_tokens: 16384,
-        chat_template_kwargs: { thinking: false }
+        top_p: 1,
+        max_tokens: 4096,
+        stream: false
       },
       {
         headers: {
@@ -83,6 +83,10 @@ Contoh JSON conversational:
     if (result.error) {
       console.error("NVIDIA API Error:", result.error);
       return { intent: "error", message: "Maaf, terjadi gangguan dari sisi API NVIDIA." };
+    }
+    const reasoning = result.choices[0]?.message?.reasoning_content;
+    if (reasoning) {
+      console.log("AI Reasoning:", reasoning);
     }
     
     const content = result.choices[0]?.message?.content;
