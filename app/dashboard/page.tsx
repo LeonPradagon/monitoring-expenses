@@ -171,6 +171,17 @@ export default function DashboardPage() {
                     const d = new Date(t.date);
                     return d.getMonth() === selectedMonth && d.getFullYear() === selectedYear;
                   })} 
+                  onUpdate={() => {
+                    const fetchData = async () => {
+                      const data = await getDashboardData();
+                      if (data) {
+                        setCategories(data.categories);
+                        setTransactions(data.transactions);
+                        setAccounts(data.accounts);
+                      }
+                    };
+                    fetchData();
+                  }}
                 />
               </div>
               

@@ -134,6 +134,36 @@ export async function deleteTransaction(id: string, account_id: string, amount: 
     return true;
 }
 
+export async function deleteAccount(id: string) {
+    const supabase = await createServerSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Unauthorized");
+
+    const { error } = await supabase
+        .from('accounts')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+    if (error) throw error;
+    return true;
+}
+
+export async function deleteCategory(id: string) {
+    const supabase = await createServerSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Unauthorized");
+
+    const { error } = await supabase
+        .from('categories')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+    if (error) throw error;
+    return true;
+}
+
 export async function getUserByTelegramId(chatId: string) {
     const supabase = await createServerSupabaseClient();
     const { data } = await supabase

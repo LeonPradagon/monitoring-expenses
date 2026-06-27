@@ -8,7 +8,7 @@ import { format, isToday, isYesterday } from "date-fns";
 import { deleteTransaction } from "@/lib/actions";
 import { useState } from "react";
 
-export function TransactionList({ transactions }: { transactions: any[] }) {
+export function TransactionList({ transactions, onUpdate }: { transactions: any[], onUpdate?: () => void }) {
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const formatter = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });
 
@@ -34,7 +34,9 @@ export function TransactionList({ transactions }: { transactions: any[] }) {
       setLoadingId(t.id);
       try {
         await deleteTransaction(t.id, t.account_id, parseFloat(t.amount), t.type);
-      } catch (e) {
+        if (onUpdate) onUpdate();
+      } catch (e: any) {
+        alert("Gagal menghapus transaksi: " + e.message);
         console.error(e);
       }
       setLoadingId(null);

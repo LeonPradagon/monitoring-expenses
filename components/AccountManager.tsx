@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Wallet, Save, Loader2, Sparkles, Plus, Trash2 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { createAccount, deleteAccount } from "@/lib/actions";
 
 export function AccountManager({ accounts, onUpdate }: { accounts: any[], onUpdate: () => void }) {
   const [loading, setLoading] = useState(false);
@@ -13,39 +13,41 @@ export function AccountManager({ accounts, onUpdate }: { accounts: any[], onUpda
   const [newName, setNewName] = useState("");
   const [newBalance, setNewBalance] = useState("");
   const [newType, setNewType] = useState("bank");
-  const supabase = createClient();
 
   const handleAddAccount = async () => {
     if (!newName) return;
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const { error } = await supabase
-      .from("accounts")
-      .insert({ 
-        user_id: user.id,
+    
+    try {
+      await createAccount({
         name: newName,
         type: newType,
         balance: parseFloat(newBalance) || 0,
         currency: 'IDR'
       });
-
-    if (!error) {
       setNewName("");
       setNewBalance("");
       onUpdate();
+    } catch (error: any) {
+      alert("Gagal menambahkan akun: " + error.message);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  };
+  }; 
+
 
   const handleDeleteAccount = async (id: string) => {
+    if (!confirm("Apakah Anda yakin ingin menghapus akun ini? Transaksi yang terkait mungkin akan error atau terhapus.")) return;
+
     setLoadingId(id);
-    const { error } = await supabase.from("accounts").delete().eq("id", id);
-    if (!error) {
+    try {
+      await deleteAccount(id);
       onUpdate();
+    } catch (error: any) {
+      alert("Gagal menghapus akun: " + error.message);
+    } finally {
+      setLoadingId(null);
     }
-    setLoadingId(null);
   };
 
   const formatter = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });

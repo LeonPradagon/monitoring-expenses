@@ -115,7 +115,70 @@ export function setupHandlers(bot: Bot) {
     }
 
     if (parsed.intent === "conversational") {
-      return ctx.reply(parsed.response_message || "Maaf, aku nggak ngerti maksudmu.");
+      return ctx.reply(parsed.response_message || "Maaf, aku nggak ngerti maksudmu.", { parse_mode: "HTML" });
+    }
+
+    const formatter = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });
+
+    if (parsed.intent === "check_balance") {
+      if (parsed.account_name) {
+        const acc = context.accounts.find((a: any) => a.name.toLowerCase().includes(parsed.account_name.toLowerCase()));
+        if (acc) {
+          const { data: dbAcc } = await supabaseAdmin.from('accounts').select('balance').eq('id', acc.id).single();
+          const bal = parseFloat(dbAcc?.balance || 0);
+          return ctx.reply(`💰 <b>Saldo ${acc.name}</b> Anda saat ini adalah: <b>${formatter.format(bal)}</b>`, { parse_mode: "HTML" });
+        } else {
+          return ctx.reply(`Maaf, aku tidak menemukan akun bernama "${parsed.account_name}".`);
+        }
+      } else {
+        const { data: accounts } = await supabaseAdmin.from('accounts').select('name, balance').eq('user_id', userId);
+        const total = accounts?.reduce((sum, a) => sum + parseFloat(a.balance || 0), 0) || 0;
+        const details = accounts?.map(a => `- ${a.name}: ${formatter.format(parseFloat(a.balance || 0))}`).join('\n');
+        return ctx.reply(`💰 <b>Total Saldo Keseluruhan: ${formatter.format(total)}</b>\n\nDetail:\n${details}`, { parse_mode: "HTML" });
+      }
+    }
+
+    if (parsed.intent === "check_budget") {
+      const { data: budgets } = await supabaseAdmin.from('budgets').select('*, categories(name)').eq('user_id', userId).eq('is_active', true);
+      
+      if (!budgets || budgets.length === 0) {
+        return ctx.reply("Anda belum memiliki budget yang aktif bulan ini.");
+      }
+
+      // Calculate spending for this month for the budgets
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0,0,0,0);
+      
+      const { data: expenses } = await supabaseAdmin
+        .from('transactions')
+        .select('amount, category_id')
+        .eq('user_id', userId)
+        .eq('type', 'expense')
+        .gte('date', startOfMonth.toISOString().split('T')[0]);
+
+      let replyMsg = "📊 <b>Status Budget Anda Bulan Ini:</b>\n\n";
+
+      for (const b of budgets) {
+        if (parsed.category_name && !b.name.toLowerCase().includes(parsed.category_name.toLowerCase()) && !(b.categories?.name || "").toLowerCase().includes(parsed.category_name.toLowerCase())) {
+          continue; // skip if filtering by specific category
+        }
+        
+        const spent = expenses?.filter(e => e.category_id === b.category_id).reduce((sum, e) => sum + parseFloat(e.amount), 0) || 0;
+        const remaining = parseFloat(b.amount) - spent;
+        const percent = Math.min(100, Math.round((spent / parseFloat(b.amount)) * 100));
+        const icon = percent >= 100 ? "🔴" : percent >= (b.alert_at || 80) ? "🟡" : "🟢";
+        
+        replyMsg += `${icon} <b>${b.name}</b>\n`;
+        replyMsg += `Terpakai: ${formatter.format(spent)} (${percent}%)\n`;
+        replyMsg += `Sisa: <b>${formatter.format(remaining)}</b> dari ${formatter.format(parseFloat(b.amount))}\n\n`;
+      }
+
+      if (replyMsg === "📊 <b>Status Budget Anda Bulan Ini:</b>\n\n") {
+         return ctx.reply(`Maaf, aku tidak menemukan budget untuk kategori "${parsed.category_name}".`);
+      }
+
+      return ctx.reply(replyMsg, { parse_mode: "HTML" });
     }
 
     if (parsed.intent === "create_transaction") {

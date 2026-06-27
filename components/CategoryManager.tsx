@@ -5,43 +5,44 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, Target, Plus, Trash2 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { createCategory, deleteCategory } from "@/lib/actions";
 
 export function CategoryManager({ categories, onUpdate }: { categories: any[], onUpdate: () => void }) {
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
   const [newType, setNewType] = useState("expense");
-  const supabase = createClient();
 
   const handleAddCategory = async () => {
     if (!newName) return;
     setLoadingId('new');
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
 
-    const { error } = await supabase
-      .from("categories")
-      .insert({ 
-        user_id: user.id,
+    try {
+      await createCategory({
         name: newName,
         type: newType,
         icon: newType === 'expense' ? '💸' : '💰'
       });
-
-    if (!error) {
       setNewName("");
       onUpdate();
+    } catch (error: any) {
+      alert("Gagal menambahkan kategori: " + error.message);
+    } finally {
+      setLoadingId(null);
     }
-    setLoadingId(null);
   };
 
   const handleDeleteCategory = async (id: string) => {
+    if (!confirm("Apakah Anda yakin ingin menghapus kategori ini?")) return;
+    
     setLoadingId(id);
-    const { error } = await supabase.from("categories").delete().eq("id", id);
-    if (!error) {
+    try {
+      await deleteCategory(id);
       onUpdate();
+    } catch (error: any) {
+      alert("Gagal menghapus kategori: " + error.message);
+    } finally {
+      setLoadingId(null);
     }
-    setLoadingId(null);
   };
 
   return (
