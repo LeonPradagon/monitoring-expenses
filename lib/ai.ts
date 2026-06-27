@@ -93,7 +93,7 @@ IMPORTANT: OUTPUT ONLY THE JSON OBJECT. DO NOT OUTPUT ANY THOUGHT PROCESS OR EXP
 
   try {
     const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemma-4-31b-it:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
         contents: [
           {
@@ -102,7 +102,10 @@ IMPORTANT: OUTPUT ONLY THE JSON OBJECT. DO NOT OUTPUT ANY THOUGHT PROCESS OR EXP
               { text: `${systemPrompt}\n\nPESAN USER:\n${text}` }
             ]
           }
-        ]
+        ],
+        generationConfig: {
+          responseMimeType: "application/json"
+        }
       },
       {
         headers: {
