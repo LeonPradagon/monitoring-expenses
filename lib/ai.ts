@@ -63,7 +63,7 @@ Contoh JSON conversational:
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        "model": "openai/gpt-oss-120b",
+        "model": "google/gemini-2.5-flash",
         "messages": [
           { role: "system", content: systemPrompt },
           { role: "user", content: text }
@@ -73,7 +73,12 @@ Contoh JSON conversational:
     });
 
     const result = await response.json();
-    const content = result.choices[0].message.content;
+    if (result.error) {
+      console.error("OpenRouter API Error:", result.error);
+      return null;
+    }
+    const content = result.choices[0]?.message?.content;
+    if (!content) throw new Error("No content from AI");
     
     // Attempt to parse the content as JSON. Sometimes AI returns markdown code blocks.
     const jsonStr = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();

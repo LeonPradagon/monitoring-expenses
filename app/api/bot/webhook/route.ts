@@ -2,6 +2,8 @@ import { Bot, webhookCallback, InlineKeyboard } from "grammy";
 import { parseNaturalLanguage } from "@/lib/ai";
 import { createClient } from "@supabase/supabase-js";
 
+export const maxDuration = 60; // Prevent Vercel from killing the function early
+
 const bot = new Bot(process.env.TELEGRAM_SECRET_TOKEN || "");
 
 // Admin supabase client for webhook (bypasses RLS)
