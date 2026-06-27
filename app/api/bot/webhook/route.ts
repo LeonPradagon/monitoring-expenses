@@ -1,4 +1,4 @@
-import { Bot, webhookCallback } from "grammy";
+import { Bot, webhookCallback, InlineKeyboard } from "grammy";
 import { parseNaturalLanguage } from "@/lib/ai";
 import { createClient } from "@supabase/supabase-js";
 
@@ -38,37 +38,17 @@ bot.command("start", async (ctx) => {
       if (insertErr) throw insertErr;
     }
 
-    await ctx.reply("✅ Akun Telegram Anda berhasil dihubungkan ke MoneyTrack Pro!");
+    await ctx.reply(
+      "✅ *Akun Telegram Anda berhasil dihubungkan ke MoneyTrack Pro!*\n\n" +
+      "Mulai sekarang, Anda bisa mencatat transaksi langsung dari sini. Ketik aja:\n" +
+      "_\"Beli kopi 25rb pakai gopay\"_\n\n" +
+      "Ketik /bantuan untuk melihat panduan lengkapnya.",
+      { parse_mode: "Markdown" }
+    );
   } catch (error: any) {
     console.error("Link error:", error);
     await ctx.reply("❌ Gagal menghubungkan akun. Error: " + (error.message || "Unknown error"));
   }
-});
-
-bot.command("saldo", async (ctx) => {
-  const { data: userSettings } = await supabaseAdmin
-    .from('user_settings')
-    .select('user_id')
-    .eq('telegram_chat_id', ctx.chat.id.toString())
-    .maybeSingle();
-
-  const userId = userSettings?.user_id;
-  if (!userId) return ctx.reply("Akun Anda belum terhubung. Gunakan Web Dashboard.");
-
-  const { data: accounts } = await supabaseAdmin
-    .from('accounts')
-    .select('name, balance')
-    .eq('user_id', userId)
-    .eq('is_active', true);
-
-  if (!accounts || accounts.length === 0) {
-    return ctx.reply("Anda belum memiliki akun keuangan yang aktif.");
-  }
-
-  const formatter = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });
-  const balances = accounts.map((a: any) => `- ${a.name}: ${formatter.format(a.balance || 0)}`).join("\n");
-  
-  await ctx.reply(`💰 *Saldo Anda saat ini:*\n\n${balances}`, { parse_mode: "Markdown" });
 });
 
 bot.on("message:text", async (ctx) => {
@@ -80,6 +60,34 @@ bot.on("message:text", async (ctx) => {
 
   const userId = userSettings?.user_id;
   if (!userId) return ctx.reply("Akun belum terhubung. Klik connect dari Web Dashboard.");
+
+  // /bantuan command
+  if (ctx.message?.text === "/bantuan" || ctx.message?.text === "/help") {
+    return ctx.reply(
+      "👋 *Bantuan Nanalys*\n\n" +
+      "Ketik aja transaksimu pakai bahasa sehari-hari. Contoh:\n" +
+      "• _Makan siang 50rb pakai BCA_\n" +
+      "• _Gaji masuk 5jt ke Mandiri_\n" +
+      "• _Beli kopi 25k_\n\n" +
+      "Nanalys bakal otomatis catat ke akun & kategori yang pas!",
+      {
+        parse_mode: "Markdown",
+        reply_markup: new InlineKeyboard().url("Lihat Dashboard", process.env.NEXT_PUBLIC_APP_URL || "https://monitoring-expenses.vercel.app")
+      }
+    );
+  }
+
+  // Command check for /saldo
+  if (ctx.message?.text === "/saldo") {
+    const { data: accounts } = await supabaseAdmin.from('accounts').select('*').eq('user_id', userId);
+    if (!accounts || accounts.length === 0) return ctx.reply("Belum ada akun keuangan yang terdaftar.");
+    
+    const balances = accounts.map(a => `💰 *${a.name}*: Rp ${Number(a.balance).toLocaleString('id-ID')}`).join('\n');
+    return ctx.reply(`*Saldo Akun Anda:*\n\n${balances}`, {
+      parse_mode: "Markdown",
+      reply_markup: new InlineKeyboard().url("Cek Detail di Web", process.env.NEXT_PUBLIC_APP_URL || "https://monitoring-expenses.vercel.app")
+    });
+  }
 
   await ctx.replyWithChatAction("typing");
 
@@ -94,50 +102,59 @@ bot.on("message:text", async (ctx) => {
   const context = { accounts: accounts || [], categories: categories || [] };
   const parsed = await parseNaturalLanguage(ctx.message.text, context);
 
-  if (!parsed || parsed.intent !== "create_transaction") {
-    return ctx.reply("Maaf, saya tidak mengerti transaksi yang Anda maksud. Coba sebutkan nominal dan keterangannya secara jelas. (Contoh: Beli kopi 25rb pakai gopay)");
+  if (!parsed) {
+    return ctx.reply("Maaf, Nanalys tidak mengerti maksudmu. Coba sampaikan dengan lebih jelas ya!");
   }
 
-  try {
-    const accountId = parsed.account_id || context.accounts[0]?.id;
-    if (!accountId) throw new Error("No account found");
+  if (parsed.intent === "conversational") {
+    return ctx.reply(parsed.response_message || "Maaf, aku nggak ngerti maksudmu.");
+  }
 
-    // Start a simple transaction logic via RPC or sequential calls
-    // 1. Get current balance
-    const { data: accountData } = await supabaseAdmin.from('accounts').select('balance').eq('id', accountId).single();
-    let currentBalance = parseFloat(accountData?.balance || 0);
+  if (parsed.intent === "create_transaction") {
+    try {
+      const accountId = parsed.account_id || context.accounts[0]?.id;
+      if (!accountId) throw new Error("No account found");
 
-    // 2. Calculate new balance
-    const amount = parseFloat(parsed.amount);
-    if (parsed.type === 'expense') currentBalance -= amount;
-    else if (parsed.type === 'income') currentBalance += amount;
+      // Calculate new balance
+      const { data: accountData } = await supabaseAdmin.from('accounts').select('balance').eq('id', accountId).single();
+      let currentBalance = parseFloat(accountData?.balance || 0);
+      const amount = parseFloat(parsed.amount);
+      if (parsed.type === 'expense') currentBalance -= amount;
+      else if (parsed.type === 'income') currentBalance += amount;
 
-    // 3. Update account balance
-    await supabaseAdmin.from('accounts').update({ balance: currentBalance }).eq('id', accountId);
+      await supabaseAdmin.from('accounts').update({ balance: currentBalance }).eq('id', accountId);
 
-    // 4. Insert transaction
-    await supabaseAdmin.from('transactions').insert({
-      user_id: userId,
-      account_id: accountId,
-      category_id: parsed.category_id || null,
-      type: parsed.type,
-      amount: amount,
-      description: parsed.description,
-      date: new Date().toISOString().split('T')[0],
-      source: 'telegram',
-      ai_categorized: true
-    });
-    
-    const formatter = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });
-    const amountStr = formatter.format(amount);
-    const typeStr = parsed.type === 'income' ? 'Pemasukan' : 'Pengeluaran';
-    const accountName = context.accounts.find((a: any) => a.id === accountId)?.name || 'Default';
-    
-    await ctx.reply(`✅ *Transaksi berhasil dicatat*\n\n📌 ${parsed.description}\n💸 ${amountStr} (${typeStr})\n🏦 ${accountName}`, { parse_mode: "Markdown" });
-    
-  } catch (error) {
-    console.error(error);
-    await ctx.reply("❌ Gagal mencatat transaksi. Terjadi kesalahan pada sistem.");
+      await supabaseAdmin.from('transactions').insert({
+        user_id: userId,
+        account_id: accountId,
+        category_id: parsed.category_id || null,
+        type: parsed.type,
+        amount: amount,
+        description: parsed.description,
+        date: new Date().toISOString().split('T')[0],
+        source: 'telegram',
+        ai_categorized: true
+      });
+      
+      const formatter = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });
+      const amountStr = formatter.format(amount);
+      const typeStr = parsed.type === 'income' ? 'Pemasukan 📈' : 'Pengeluaran 📉';
+      
+      return ctx.reply(
+        `✅ *Transaksi Berhasil Dicatat!*\n\n` +
+        `📝 *Keterangan*: ${parsed.description}\n` +
+        `💵 *Nominal*: ${amountStr}\n` +
+        `🏷️ *Tipe*: ${typeStr}\n\n` +
+        `Semangat terus atur keuangannya! 🚀`,
+        {
+          parse_mode: "Markdown",
+          reply_markup: new InlineKeyboard().url("Cek di Web", process.env.NEXT_PUBLIC_APP_URL || "https://monitoring-expenses.vercel.app")
+        }
+      );
+    } catch (error) {
+      console.error(error);
+      return ctx.reply("❌ Gagal mencatat transaksi. Terjadi kesalahan pada sistem.");
+    }
   }
 });
 
