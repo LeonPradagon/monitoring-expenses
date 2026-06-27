@@ -60,39 +60,32 @@ Contoh JSON conversational:
 
   try {
     const response = await axios.post(
-      "https://integrate.api.nvidia.com/v1/chat/completions",
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
-        model: "openai/gpt-oss-120b",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: text }
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { text: `${systemPrompt}\n\nPESAN USER:\n${text}` }
+            ]
+          }
         ],
-        temperature: 1,
-        top_p: 1,
-        max_tokens: 4096,
-        stream: false
+        generationConfig: {
+          responseMimeType: "application/json"
+        }
       },
       {
         headers: {
-          "Authorization": `Bearer ${process.env.NVIDIA_API_KEY}`,
           "Content-Type": "application/json"
         }
       }
     );
 
     const result = response.data;
-    if (result.error) {
-      console.error("NVIDIA API Error:", result.error);
-      return { intent: "error", message: "Maaf, terjadi gangguan dari sisi API NVIDIA." };
-    }
-    const reasoning = result.choices[0]?.message?.reasoning_content;
-    if (reasoning) {
-      console.log("AI Reasoning:", reasoning);
-    }
+    const content = result.candidates?.[0]?.content?.parts?.[0]?.text;
     
-    const content = result.choices[0]?.message?.content;
     if (!content) {
-      return { intent: "error", message: "Maaf, NVIDIA API tidak mengembalikan balasan apa-apa." };
+      return { intent: "error", message: "Maaf, Gemini API tidak mengembalikan balasan apa-apa." };
     }
     
     // Attempt to parse the content as JSON. Sometimes AI returns markdown code blocks.
@@ -101,8 +94,8 @@ Contoh JSON conversational:
     
   } catch (error: any) {
     const errorData = error.response?.data || error.message;
-    console.error("AI Parsing Error (NVIDIA):", errorData);
+    console.error("AI Parsing Error (Gemini):", errorData);
     
-    return { intent: "error", message: "Maaf, terjadi gangguan pada sistem AI Nanalys (NVIDIA API Error)." };
+    return { intent: "error", message: "Maaf, terjadi gangguan pada sistem AI Nanalys (Gemini API Error)." };
   }
 }
