@@ -23,7 +23,7 @@ bot.command("start", async (ctx) => {
       .from('user_settings')
       .select('*')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
     
     if (existing) {
       await supabaseAdmin.from('user_settings').update({ telegram_chat_id: ctx.chat.id.toString() }).eq('user_id', userId);
@@ -43,7 +43,7 @@ bot.command("saldo", async (ctx) => {
     .from('user_settings')
     .select('user_id')
     .eq('telegram_chat_id', ctx.chat.id.toString())
-    .single();
+    .maybeSingle();
 
   const userId = userSettings?.user_id;
   if (!userId) return ctx.reply("Akun Anda belum terhubung. Gunakan Web Dashboard.");
@@ -69,7 +69,7 @@ bot.on("message:text", async (ctx) => {
     .from('user_settings')
     .select('user_id')
     .eq('telegram_chat_id', ctx.chat.id.toString())
-    .single();
+    .maybeSingle();
 
   const userId = userSettings?.user_id;
   if (!userId) return ctx.reply("Akun belum terhubung. Klik connect dari Web Dashboard.");
