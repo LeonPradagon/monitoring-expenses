@@ -63,7 +63,7 @@ Contoh JSON conversational:
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        "model": "google/gemini-2.0-flash-lite-preview-02-05:free",
+        "model": "google/gemma-4-31b-it:free",
         "messages": [
           { role: "system", content: systemPrompt },
           { role: "user", content: text }
