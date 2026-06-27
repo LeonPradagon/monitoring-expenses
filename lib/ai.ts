@@ -87,11 +87,13 @@ Contoh JSON conversational:
   "intent": "conversational",
   "response_message": "Halo juga! Aku Nanalys, asisten keuangan kamu. Hari ini ada transaksi yang mau dicatat?"
 }
+
+IMPORTANT: OUTPUT ONLY THE JSON OBJECT. DO NOT OUTPUT ANY THOUGHT PROCESS OR EXPLANATION. DO NOT USE MARKDOWN FORMATTING.
 `;
 
   try {
     const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemma-4-31b-it:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
         contents: [
           {
@@ -100,10 +102,7 @@ Contoh JSON conversational:
               { text: `${systemPrompt}\n\nPESAN USER:\n${text}` }
             ]
           }
-        ],
-        generationConfig: {
-          responseMimeType: "application/json"
-        }
+        ]
       },
       {
         headers: {
@@ -119,8 +118,16 @@ Contoh JSON conversational:
       return { intent: "error", message: "Maaf, Gemini API tidak mengembalikan balasan apa-apa." };
     }
     
-    // Attempt to parse the content as JSON. Sometimes AI returns markdown code blocks.
-    const jsonStr = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    // Extract JSON block in case model outputs extra text
+    let jsonStr = content.replace(/```json\n?/gi, '').replace(/```\n?/g, '').trim();
+    
+    const firstBrace = jsonStr.indexOf('{');
+    const lastBrace = jsonStr.lastIndexOf('}');
+    
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace >= firstBrace) {
+      jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
+    }
+    
     return JSON.parse(jsonStr);
     
   } catch (error: any) {
