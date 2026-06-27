@@ -46,18 +46,18 @@ export default function LandingPage() {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
             </span>
-            v2.0.0 — Family Edition is here
+            v2.0.0 — Personal Edition is here
           </div>
           <h1 className="text-5xl md:text-7xl font-bold tracking-tight mb-8 bg-clip-text text-transparent bg-gradient-to-b from-white to-white/50">
-            Control Family Expenses <br /> With Unmatched Speed.
+            Control Your Finances <br /> With Unmatched Speed.
           </h1>
           <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mb-12 leading-relaxed">
-            The ultimate expense tracker for modern families. Log transactions via Telegram in seconds, visualize spending patterns, and stay within budget together.
+            The ultimate expense tracker for professionals. Log transactions via Telegram in seconds, visualize spending patterns, and stay within your budget.
           </p>
           <div className="flex flex-col sm:flex-row gap-4">
             <Link href="/auth?signup=true">
               <Button size="lg" className="h-14 px-8 text-lg font-semibold bg-primary hover:bg-primary/90 shadow-xl shadow-primary/20">
-                Create Family Group
+                Get Started Free
               </Button>
             </Link>
             <Button size="lg" variant="outline" className="h-14 px-8 text-lg font-semibold border-white/10 hover:bg-white/5">
@@ -87,20 +87,20 @@ export default function LandingPage() {
             />
             <FeatureCard 
               icon={<Users className="text-emerald-400" />}
-              title="Family Centric"
-              description="Invite family members with a code. Everyone can log and view shared budgets in real-time."
+              title="Multi-Account Tracking"
+              description="Manage all your wallets, banks, and credit cards in one unified dashboard effortlessly."
             />
             <FeatureCard 
               icon={<Shield className="text-primary" />}
               title="Privacy First"
-              description="Your data is encrypted and isolated. Only your family can see your spending habits."
+              description="Your data is encrypted and isolated. Your personal finances stay strictly private."
             />
           </div>
         </section>
       </main>
 
       <footer className="px-6 py-12 border-t border-white/5 text-center text-sm text-muted-foreground">
-        <p>© 2026 MoneyTrack Pro. Built for modern families.</p>
+        <p>© 2026 MoneyTrack Pro. Built for professionals.</p>
       </footer>
     </div>
   );

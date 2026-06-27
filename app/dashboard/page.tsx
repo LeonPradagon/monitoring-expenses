@@ -1,12 +1,9 @@
 "use client";
 
-import { useFamily } from "@/hooks/useFamily";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Plus, Users, Wallet } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { TelegramConnect } from "@/components/TelegramConnect";
@@ -14,57 +11,47 @@ import { StatsDashboard } from "@/components/StatsDashboard";
 import { TransactionList } from "@/components/TransactionList";
 import { TransactionForm } from "@/components/TransactionForm";
 import { CategoryManager } from "@/components/CategoryManager";
-import { BalanceManager } from "@/components/BalanceManager";
-import { getDashboardData, createFamily, joinFamily, getFamilyContext } from "@/lib/actions";
+import { AccountManager } from "@/components/AccountManager";
+import { getDashboardData } from "@/lib/actions";
 
 export default function DashboardPage() {
-  const { family, member, loading, setFamily } = useFamily();
-  const [creating, setCreating] = useState(false);
-  const [joining, setJoining] = useState(false);
-  const [familyName, setFamilyName] = useState("");
-  const [inviteCode, setInviteCode] = useState("");
+  const [user, setUser] = useState<any>(null);
+  const [loadingAuth, setLoadingAuth] = useState(true);
+  
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<any[]>([]);
+  const [loadingStats, setLoadingStats] = useState(true);
+
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  
   const supabase = createClient();
   const router = useRouter();
 
-  const handleCreateFamily = async () => {
-    setCreating(true);
-    try {
-      const result = await createFamily(familyName);
-      setFamily(result.family);
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setCreating(false);
+  useEffect(() => {
+    async function checkAuth() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        router.push("/auth");
+      } else {
+        setUser(user);
+      }
+      setLoadingAuth(false);
     }
-  };
-
-  const handleJoinFamily = async () => {
-    setJoining(true);
-    try {
-      const result = await joinFamily(inviteCode);
-      setFamily(result.family);
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setJoining(false);
-    }
-  };
-
-  const [transactions, setTransactions] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
-  const [loadingStats, setLoadingStats] = useState(false);
+    checkAuth();
+  }, [router, supabase]);
 
   useEffect(() => {
-    if (!family) return;
+    if (!user) return;
 
     async function fetchData() {
       setLoadingStats(true);
-      const data = await getDashboardData(family.id);
+      const data = await getDashboardData();
       if (data) {
         setCategories(data.categories);
         setTransactions(data.transactions);
+        setAccounts(data.accounts);
       }
       setLoadingStats(false);
     }
@@ -76,25 +63,22 @@ export default function DashboardPage() {
       .channel('schema-db-changes')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'transactions', filter: `family_id=eq.${family.id}` },
+        { event: '*', schema: 'public', table: 'transactions', filter: `user_id=eq.${user.id}` },
         () => fetchData()
       )
       .on(
         'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'families', filter: `id=eq.${family.id}` },
-        async () => {
-          const membership = await getFamilyContext();
-          if (membership) setFamily(membership.family);
-        }
+        { event: '*', schema: 'public', table: 'accounts', filter: `user_id=eq.${user.id}` },
+        () => fetchData()
       )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [family]);
+  }, [user, supabase]);
 
-  if (loading) {
+  if (loadingAuth) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-zinc-950">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -102,84 +86,13 @@ export default function DashboardPage() {
     );
   }
 
-  if (!family) {
-    return (
-      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-6">
-        <div className="w-full max-w-4xl grid md:grid-cols-2 gap-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
-          
-          {/* Create Family */}
-          <Card className="border-white/5 bg-white/[0.02] backdrop-blur-xl">
-            <CardHeader>
-              <div className="w-12 h-12 bg-primary/20 rounded-xl flex items-center justify-center mb-4">
-                <Plus className="text-primary w-6 h-6" />
-              </div>
-              <CardTitle className="text-2xl text-white">Create Family</CardTitle>
-              <CardDescription>Start a new group and invite your family members.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Input 
-                  placeholder="Family Name (e.g. The Wilsons)" 
-                  value={familyName}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFamilyName(e.target.value)}
-                  className="bg-white/5 border-white/10"
-                />
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Button 
-                onClick={handleCreateFamily} 
-                className="w-full bg-primary hover:bg-primary/90" 
-                disabled={creating || !familyName}
-              >
-                {creating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Create Group
-              </Button>
-            </CardFooter>
-          </Card>
-
-          {/* Join Family */}
-          <Card className="border-white/5 bg-white/[0.02] backdrop-blur-xl">
-            <CardHeader>
-              <div className="w-12 h-12 bg-emerald-500/20 rounded-xl flex items-center justify-center mb-4">
-                <Users className="text-emerald-500 w-6 h-6" />
-              </div>
-              <CardTitle className="text-2xl text-white">Join Family</CardTitle>
-              <CardDescription>Enter a 6-digit code provided by your family admin.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Input 
-                  placeholder="Invite Code (e.g. AB12CD)" 
-                  value={inviteCode}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInviteCode(e.target.value)}
-                  className="bg-white/5 border-white/10 uppercase"
-                />
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Button 
-                onClick={handleJoinFamily} 
-                variant="outline" 
-                className="w-full border-white/10 hover:bg-white/5" 
-                disabled={joining || inviteCode.length < 6}
-              >
-                {joining && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Join Group
-              </Button>
-            </CardFooter>
-          </Card>
-
-        </div>
-      </div>
-    );
-  }
+  if (!user) return null;
 
   return (
     <div className="min-h-screen bg-zinc-950 p-6">
       <header className="flex items-center justify-between mb-8 max-w-7xl mx-auto">
         <div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">{family.name}</h1>
+          <h1 className="text-3xl font-bold text-white tracking-tight">Personal Dashboard</h1>
           <div className="flex items-center gap-4 mt-1">
             <p className="text-muted-foreground text-sm flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Live Monitoring
@@ -201,18 +114,15 @@ export default function DashboardPage() {
               onChange={(e) => setSelectedYear(parseInt(e.target.value))}
               className="bg-transparent text-sm text-white font-medium focus:outline-none cursor-pointer hover:text-primary transition-colors"
             >
-              {[2024, 2025, 2026].map(y => (
+              {[2024, 2025, 2026, 2027].map(y => (
                 <option key={y} value={y} className="bg-zinc-900 text-white">{y}</option>
               ))}
             </select>
           </div>
         </div>
         <div className="flex items-center gap-6">
-          <TelegramConnect familyMember={member} />
+          <TelegramConnect user={user} />
           <div className="flex gap-4">
-            <Button variant="outline" className="border-white/5 bg-white/5 h-10 px-4">
-              Invite: <span className="ml-2 font-mono text-primary font-bold">{family.invite_code}</span>
-            </Button>
             <Button onClick={async () => {
                await supabase.auth.signOut();
                router.push("/auth");
@@ -234,20 +144,21 @@ export default function DashboardPage() {
                 return d.getMonth() === selectedMonth && d.getFullYear() === selectedYear;
               })} 
               categories={categories} 
-              family={family} 
+              accounts={accounts}
             />
             
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <div className="lg:col-span-2 space-y-12">
                 <TransactionForm 
-                  familyId={family.id} 
                   categories={categories} 
+                  accounts={accounts}
                   onSuccess={() => {
                     const fetchData = async () => {
-                      const data = await getDashboardData(family.id);
+                      const data = await getDashboardData();
                       if (data) {
                         setCategories(data.categories);
                         setTransactions(data.transactions);
+                        setAccounts(data.accounts);
                       }
                     };
                     fetchData();
@@ -258,25 +169,25 @@ export default function DashboardPage() {
                     const d = new Date(t.date);
                     return d.getMonth() === selectedMonth && d.getFullYear() === selectedYear;
                   })} 
-                  familyName={family.name} 
                 />
               </div>
               
               <div className="space-y-8">
-                <BalanceManager 
-                  family={family} 
+                <AccountManager 
+                  accounts={accounts} 
                   onUpdate={async () => {
-                    const membership = await getFamilyContext();
-                    if (membership) setFamily(membership.family);
+                    const data = await getDashboardData();
+                    if (data) {
+                      setAccounts(data.accounts);
+                    }
                   }}
                 />
                 <CategoryManager 
                   categories={categories} 
                   onUpdate={async () => {
-                    const data = await getDashboardData(family.id);
+                    const data = await getDashboardData();
                     if (data) {
                       setCategories(data.categories);
-                      setTransactions(data.transactions);
                     }
                   }} 
                 />

@@ -2,104 +2,176 @@
 
 import { createServerSupabaseClient } from "./supabase/server";
 
-export async function getFamilyContext() {
+export async function getUserContext() {
     const supabase = await createServerSupabaseClient();
     const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) return null;
-
-    const { data: membership, error } = await supabase
-        .from('family_members')
-        .select('*, family:families(*)')
-        .eq('user_id', user.id)
-        .single();
-
-    if (error) return null;
-    return membership;
+    return user;
 }
 
-export async function getDashboardData(familyId: string) {
-    const supabase = await createServerSupabaseClient();
-
-    const { data: categories } = await supabase
-        .from('categories')
-        .select('*')
-        .eq('family_id', familyId);
-
-    const { data: transactions } = await supabase
-        .from('transactions')
-        .select('*, category:categories(*)')
-        .eq('family_id', familyId)
-        .order('date', { ascending: false });
-
-    return { categories: categories || [], transactions: transactions || [] };
-}
-
-export async function createFamily(name: string) {
+export async function getDashboardData() {
     const supabase = await createServerSupabaseClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error("Unauthorized");
-
-    const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase();
     
-    const { data: family, error: familyError } = await supabase
-        .from('families')
-        .insert({ name, invite_code: inviteCode })
-        .select()
-        .single();
+    if (!user) {
+        return { accounts: [], categories: [], transactions: [] };
+    }
 
-    if (familyError) throw familyError;
+    const [
+        { data: accounts },
+        { data: categories },
+        { data: transactions }
+    ] = await Promise.all([
+        supabase.from('accounts').select('*').eq('user_id', user.id).order('created_at', { ascending: true }),
+        supabase.from('categories').select('*').eq('user_id', user.id),
+        supabase.from('transactions').select('*, account:accounts(*), category:categories(*)').eq('user_id', user.id).order('date', { ascending: false }).limit(100)
+    ]);
 
-    const categories = [
-        { family_id: family.id, name: 'Makan', icon: '🍜', budget_limit: 1000000 },
-        { family_id: family.id, name: 'Transport', icon: '🚗', budget_limit: 500000 },
-        { family_id: family.id, name: 'Belanja', icon: '🛍️', budget_limit: 1500000 },
-        { family_id: family.id, name: 'Tagihan', icon: '💡', budget_limit: 1000000 },
-        { family_id: family.id, name: 'Kesehatan', icon: '🏥', budget_limit: 500000 },
-        { family_id: family.id, name: 'Lainnya', icon: '📦', budget_limit: 200000 },
-    ];
-
-    await supabase.from('categories').insert(categories);
-
-    const { data: member, error: memberError } = await supabase
-        .from('family_members')
-        .insert({
-            user_id: user.id,
-            family_id: family.id,
-            role: 'admin'
-        })
-        .select()
-        .single();
-
-    if (memberError) throw memberError;
-
-    return { family, member };
+    return { 
+        accounts: accounts || [], 
+        categories: categories || [], 
+        transactions: transactions || [] 
+    };
 }
 
-export async function joinFamily(inviteCode: string) {
+export async function createAccount(data: { name: string, type: string, balance: number, currency?: string }) {
     const supabase = await createServerSupabaseClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Unauthorized");
 
-    const { data: family, error: familyError } = await supabase
-        .from('families')
-        .select('*')
-        .eq('invite_code', inviteCode.toUpperCase())
-        .single();
-
-    if (familyError || !family) throw new Error("Invalid invite code");
-
-    const { data: member, error: memberError } = await supabase
-        .from('family_members')
+    const { data: account, error } = await supabase
+        .from('accounts')
         .insert({
             user_id: user.id,
-            family_id: family.id,
-            role: 'member'
+            name: data.name,
+            type: data.type,
+            balance: data.balance,
+            currency: data.currency || 'IDR'
         })
         .select()
         .single();
 
-    if (memberError) throw memberError;
-
-    return { family, member };
+    if (error) throw error;
+    return account;
 }
+
+export async function createCategory(data: { name: string, type: string, icon?: string }) {
+    const supabase = await createServerSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Unauthorized");
+
+    const { data: category, error } = await supabase
+        .from('categories')
+        .insert({
+            user_id: user.id,
+            name: data.name,
+            type: data.type,
+            icon: data.icon
+        })
+        .select()
+        .single();
+
+    if (error) throw error;
+    return category;
+}
+
+export async function createTransaction(data: { account_id: string, category_id?: string, type: string, amount: number, date: string, description?: string }) {
+    const supabase = await createServerSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Unauthorized");
+
+    const { data: transaction, error } = await supabase
+        .from('transactions')
+        .insert({
+            user_id: user.id,
+            account_id: data.account_id,
+            category_id: data.category_id || null,
+            type: data.type,
+            amount: data.amount,
+            date: data.date,
+            description: data.description || ''
+        })
+        .select()
+        .single();
+
+    if (error) throw error;
+    
+    // Update account balance
+    const { data: account } = await supabase.from('accounts').select('balance').eq('id', data.account_id).single();
+    if (account) {
+        const newBalance = data.type === 'income' 
+            ? Number(account.balance) + Number(data.amount)
+            : Number(account.balance) - Number(data.amount);
+            
+        await supabase.from('accounts').update({ balance: newBalance }).eq('id', data.account_id);
+    }
+
+    return transaction;
+}
+
+export async function deleteTransaction(id: string, account_id: string, amount: number, type: string) {
+    const supabase = await createServerSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Unauthorized");
+
+    const { error } = await supabase
+        .from('transactions')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+    if (error) throw error;
+
+    // Revert account balance
+    const { data: account } = await supabase.from('accounts').select('balance').eq('id', account_id).single();
+    if (account) {
+        const newBalance = type === 'income' 
+            ? Number(account.balance) - Number(amount)
+            : Number(account.balance) + Number(amount);
+            
+        await supabase.from('accounts').update({ balance: newBalance }).eq('id', account_id);
+    }
+    
+    return true;
+}
+
+export async function getUserByTelegramId(chatId: string) {
+    const supabase = await createServerSupabaseClient();
+    const { data } = await supabase
+        .from('user_settings')
+        .select('user_id')
+        .eq('telegram_chat_id', chatId)
+        .single();
+    return data?.user_id || null;
+}
+
+export async function linkTelegramAccount(userId: string, chatId: string) {
+    const supabase = await createServerSupabaseClient();
+    
+    // Check if user_settings exists
+    const { data: existing } = await supabase.from('user_settings').select('*').eq('user_id', userId).single();
+    
+    if (existing) {
+        await supabase.from('user_settings').update({ telegram_chat_id: chatId }).eq('user_id', userId);
+    } else {
+        await supabase.from('user_settings').insert({ user_id: userId, telegram_chat_id: chatId });
+    }
+    return true;
+}
+
+export async function getContextForAI(userId: string) {
+    const supabase = await createServerSupabaseClient();
+    
+    const [
+        { data: accounts },
+        { data: categories }
+    ] = await Promise.all([
+        supabase.from('accounts').select('id, name, type').eq('user_id', userId).eq('is_active', true),
+        supabase.from('categories').select('id, name, type').eq('user_id', userId)
+    ]);
+
+    return {
+        accounts: accounts || [],
+        categories: categories || []
+    };
+}
+

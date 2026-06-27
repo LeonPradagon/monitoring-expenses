@@ -2,26 +2,43 @@
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Download, FileSpreadsheet, Tag, Clock, User, MessageCircle, Globe, Calendar } from "lucide-react";
+import { Download, FileSpreadsheet, Tag, Clock, User, MessageCircle, Globe, Calendar, ArrowRight, Trash2, Loader2 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { format, isToday, isYesterday } from "date-fns";
+import { deleteTransaction } from "@/lib/actions";
+import { useState } from "react";
 
-export function TransactionList({ transactions, familyName }: { transactions: any[], familyName: string }) {
+export function TransactionList({ transactions }: { transactions: any[] }) {
+  const [loadingId, setLoadingId] = useState<string | null>(null);
   const formatter = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });
 
   const exportToExcel = () => {
     const worksheetData = transactions.map(t => ({
       Tanggal: format(new Date(t.date), 'dd/MM/yyyy HH:mm'),
-      Kategori: t.category?.name || 'Lainnya',
+      Akun: t.account?.name || '-',
+      Kategori: t.category?.name || 'Transfer',
+      Tipe: t.type,
       Nominal: parseFloat((t.amount || 0).toString()),
-      Catatan: t.note || '-',
+      Keterangan: t.description || '-',
       Sumber: t.source,
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(worksheetData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Transaksi");
-    XLSX.writeFile(workbook, `MoneyTrack_Pro_${familyName}_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+    XLSX.writeFile(workbook, `MoneyTrack_Pro_Personal_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+  };
+
+  const handleDelete = async (t: any) => {
+    if (confirm("Hapus transaksi ini? Saldo akun akan dikembalikan.")) {
+      setLoadingId(t.id);
+      try {
+        await deleteTransaction(t.id, t.account_id, parseFloat(t.amount), t.type);
+      } catch (e) {
+        console.error(e);
+      }
+      setLoadingId(null);
+    }
   };
 
   // Group transactions by date
@@ -74,17 +91,20 @@ export function TransactionList({ transactions, familyName }: { transactions: an
                   <div key={t.id} className="group relative flex items-center justify-between p-4 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-white/10 hover:bg-white/[0.04] transition-all">
                     <div className="flex items-center gap-4">
                       <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
-                        {t.category?.icon || '📦'}
+                        {t.category?.icon || (t.type === 'income' ? '💰' : t.type === 'expense' ? '💸' : '🔄')}
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <p className="font-semibold text-white">{t.category?.name || 'Lainnya'}</p>
+                          <p className="font-semibold text-white">{t.category?.name || 'Lain-lain'}</p>
                           <span className="text-[10px] text-muted-foreground flex items-center gap-1">
                             • {format(new Date(t.date), 'HH:mm')}
                           </span>
+                          <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded text-white ml-2">
+                            {t.account?.name}
+                          </span>
                         </div>
                         <p className="text-sm text-muted-foreground truncate max-w-[200px]">
-                          {t.note || 'Tidak ada catatan'}
+                          {t.description || '-'}
                         </p>
                       </div>
                     </div>
@@ -98,15 +118,24 @@ export function TransactionList({ transactions, familyName }: { transactions: an
                             <><Globe className="w-3 h-3 text-emerald-400" /> Web</>
                           )}
                         </div>
-                        <p className="text-lg font-bold text-white tracking-tight">
-                          {formatter.format(parseFloat((t.amount || 0).toString()))}
+                        <p className={`text-lg font-bold tracking-tight ${t.type === 'income' ? 'text-emerald-400' : t.type === 'expense' ? 'text-rose-400' : 'text-blue-400'}`}>
+                          {t.type === 'expense' ? '-' : t.type === 'income' ? '+' : ''}{formatter.format(parseFloat((t.amount || 0).toString()))}
                         </p>
                       </div>
                       <div className="md:hidden text-right">
-                         <p className="text-base font-bold text-white">
-                          {formatter.format(parseFloat((t.amount || 0).toString()))}
+                         <p className={`text-base font-bold ${t.type === 'income' ? 'text-emerald-400' : t.type === 'expense' ? 'text-rose-400' : 'text-blue-400'}`}>
+                          {t.type === 'expense' ? '-' : t.type === 'income' ? '+' : ''}{formatter.format(parseFloat((t.amount || 0).toString()))}
                         </p>
                       </div>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="opacity-0 group-hover:opacity-100 transition-opacity text-rose-500 hover:text-rose-400 hover:bg-rose-500/10"
+                        onClick={() => handleDelete(t)}
+                        disabled={loadingId === t.id}
+                      >
+                        {loadingId === t.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                      </Button>
                     </div>
                   </div>
                 ))}

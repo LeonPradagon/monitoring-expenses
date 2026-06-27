@@ -10,64 +10,120 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-// MoneyTrack Pro Models
-model Family {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name        String
-  inviteCode  String   @unique @map("invite_code")
-  totalBalance Decimal  @default(0) @map("total_balance") @db.Decimal(15, 2)
-  totalBudget  Decimal  @default(0) @map("total_budget") @db.Decimal(15, 2)
-  createdAt   DateTime @default(now()) @map("created_at")
+// User Settings
+model UserSettings {
+  userId          String   @id @map("user_id") // References Supabase auth.users
+  telegramChatId  String?  @unique @map("telegram_chat_id")
+  baseCurrency    String   @default("IDR") @map("base_currency")
+  timezone        String   @default("Asia/Jakarta")
+  dateFormat      String   @default("DD/MM/YYYY") @map("date_format")
+  reportDay       Int      @default(1) @map("report_day")
+  notifyBudget    Boolean  @default(true) @map("notify_budget")
+  notifyRecurring Boolean  @default(true) @map("notify_recurring")
+  notifyReport    String   @default("weekly") @map("notify_report")
+  reportEmail     String?  @map("report_email")
+  aiContextMonths Int      @default(3) @map("ai_context_months")
+  updatedAt       DateTime @default(now()) @map("updated_at")
 
-  members      FamilyMember[]
-  categories   Category[]
+  @@map("user_settings")
+}
+
+// Accounts
+model Account {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String   @map("user_id")
+  name       String
+  type       String   // bank | cash | ewallet | investment | credit
+  currency   String   @default("IDR")
+  balance    Decimal  @default(0) @db.Decimal(18, 2)
+  color      String?
+  icon       String?
+  isActive   Boolean  @default(true) @map("is_active")
+  notes      String?
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @default(now()) @map("updated_at")
+
   transactions Transaction[]
+  transfersIn  Transaction[] @relation("TransferToAccount")
 
-  @@map("families")
+  @@map("accounts")
 }
 
-model FamilyMember {
-  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId             String   @map("user_id")
-  familyId           String   @map("family_id") @db.Uuid
-  role               String   @default("member")
-  telegramId         BigInt?  @map("telegram_id")
-  telegramLinkCode   String?  @map("telegram_link_code")
-  createdAt          DateTime @default(now()) @map("created_at")
-
-  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
-
-  @@map("family_members")
-}
-
+// Categories
 model Category {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  familyId    String   @map("family_id") @db.Uuid
-  name        String
-  icon        String?
-  budgetLimit Decimal  @map("budget_limit") @db.Decimal(12, 2)
-  createdAt   DateTime @default(now()) @map("created_at")
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String?  @map("user_id") // Null = system default
+  name       String
+  type       String   // income | expense | transfer
+  parentId   String?  @map("parent_id") @db.Uuid
+  color      String?
+  icon       String?
+  isSystem   Boolean  @default(false) @map("is_system")
+  createdAt  DateTime @default(now()) @map("created_at")
 
-  family       Family        @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  parent     Category?  @relation("SubCategories", fields: [parentId], references: [id])
+  children   Category[] @relation("SubCategories")
+  
   transactions Transaction[]
+  budgets      Budget[]
 
   @@map("categories")
 }
 
+// Transactions
 model Transaction {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  familyId    String   @map("family_id") @db.Uuid
-  categoryId  String   @map("category_id") @db.Uuid
-  amount      Decimal  @db.Decimal(12, 2)
-  date        DateTime @default(now())
-  note        String?
-  source      String   @default("web")
-  createdBy   String   @map("created_by")
-  createdAt   DateTime @default(now()) @map("created_at")
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String   @map("user_id")
+  accountId       String   @map("account_id") @db.Uuid
+  categoryId      String?  @map("category_id") @db.Uuid
+  type            String   // income | expense | transfer
+  amount          Decimal  @db.Decimal(18, 2)
+  currency        String   @default("IDR")
+  amountIdr       Decimal? @map("amount_idr") @db.Decimal(18, 2)
+  exchangeRate    Decimal  @default(1) @map("exchange_rate") @db.Decimal(10, 6)
+  description     String?
+  notes           String?
+  tags            String[] // Prisma supports scalar lists for PostgreSQL
+  date            DateTime @db.Date
+  time            DateTime? @db.Time
+  isRecurring     Boolean  @default(false) @map("is_recurring")
+  recurringId     String?  @map("recurring_id") @db.Uuid
+  referenceNo     String?  @map("reference_no")
+  location        String?
+  merchant        String?
+  isTransfer      Boolean  @default(false) @map("is_transfer")
+  transferToId    String?  @map("transfer_to") @db.Uuid
+  attachments     String[]
+  aiCategorized   Boolean  @default(false) @map("ai_categorized")
+  source          String   @default("web") // web | telegram | import | api
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @default(now()) @map("updated_at")
 
-  family   Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  account         Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  category        Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  transferTo      Account?  @relation("TransferToAccount", fields: [transferToId], references: [id], onDelete: SetNull)
 
   @@map("transactions")
+  @@index([userId, date(sort: Desc)])
+  @@index([categoryId])
+  @@index([accountId])
 }
 
+// Budgets
+model Budget {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String   @map("user_id")
+  categoryId  String?  @map("category_id") @db.Uuid
+  name        String
+  amount      Decimal  @db.Decimal(18, 2)
+  period      String   // monthly | weekly | yearly | custom
+  startDate   DateTime? @map("start_date") @db.Date
+  endDate     DateTime? @map("end_date") @db.Date
+  alertAt     Decimal  @default(80) @map("alert_at") @db.Decimal(5, 2)
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  category    Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@map("budgets")
+}
