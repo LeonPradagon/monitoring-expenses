@@ -57,58 +57,47 @@ Contoh JSON conversational:
 }
 `;
 
-  const freeModels = [
-    "google/gemini-2.0-flash-lite-preview-02-05:free",
-    "meta-llama/llama-3-8b-instruct:free",
-    "google/gemma-2-9b-it:free"
-  ];
-
-  for (const model of freeModels) {
-    try {
-      const response = await axios.post(
-        "https://openrouter.ai/api/v1/chat/completions",
-        {
-          model: model,
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: text }
-          ]
-        },
-        {
-          headers: {
-            "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
-            "Content-Type": "application/json"
-          }
+  try {
+    const response = await axios.post(
+      "https://integrate.api.nvidia.com/v1/chat/completions",
+      {
+        model: "deepseek-ai/deepseek-v4-pro",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: text }
+        ],
+        temperature: 1,
+        top_p: 0.95,
+        max_tokens: 16384,
+        chat_template_kwargs: { thinking: false }
+      },
+      {
+        headers: {
+          "Authorization": `Bearer ${process.env.NVIDIA_API_KEY}`,
+          "Content-Type": "application/json"
         }
-      );
+      }
+    );
 
-      const result = response.data;
-      if (result.error) {
-        console.error(`OpenRouter API Error (${model}):`, result.error);
-        continue; // Try next model on API error
-      }
-      
-      const content = result.choices[0]?.message?.content;
-      if (!content) continue;
-      
-      // Attempt to parse the content as JSON. Sometimes AI returns markdown code blocks.
-      const jsonStr = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      return JSON.parse(jsonStr);
-      
-    } catch (error: any) {
-      const errorData = error.response?.data || error.message;
-      console.error(`AI Parsing Error (${model}):`, errorData);
-      
-      // If rate limited, continue to the next free model
-      if (error.response?.status === 429) {
-        continue;
-      }
-      
-      // For other critical errors (like invalid API key), return immediately
-      return { intent: "error", message: "Maaf, terjadi gangguan pada sistem AI Nanalys. Coba sampaikan dengan lebih jelas ya!" };
+    const result = response.data;
+    if (result.error) {
+      console.error("NVIDIA API Error:", result.error);
+      return { intent: "error", message: "Maaf, terjadi gangguan dari sisi API NVIDIA." };
     }
+    
+    const content = result.choices[0]?.message?.content;
+    if (!content) {
+      return { intent: "error", message: "Maaf, NVIDIA API tidak mengembalikan balasan apa-apa." };
+    }
+    
+    // Attempt to parse the content as JSON. Sometimes AI returns markdown code blocks.
+    const jsonStr = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    return JSON.parse(jsonStr);
+    
+  } catch (error: any) {
+    const errorData = error.response?.data || error.message;
+    console.error("AI Parsing Error (NVIDIA):", errorData);
+    
+    return { intent: "error", message: "Maaf, terjadi gangguan pada sistem AI Nanalys (NVIDIA API Error)." };
   }
-
-  // If all free models failed/rate-limited
-  return { intent: "error", message: "Maaf, seluruh sistem AI cadangan sedang sibuk (Rate Limit). Coba lagi dalam beberapa saat ya! 🚀" };
 }
