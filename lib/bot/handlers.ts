@@ -93,7 +93,7 @@ export function setupHandlers(bot: Bot) {
   bot.on("message:text", async (ctx) => {
     // Override ctx.reply to safely handle HTML parsing errors from Telegram
     const originalReply = ctx.reply.bind(ctx);
-    ctx.reply = async (text: string, options?: any) => {
+    ctx.reply = (async (text: string, options?: any) => {
       if (options?.parse_mode === "HTML") {
         try {
           return await originalReply(text, options);
@@ -110,7 +110,7 @@ export function setupHandlers(bot: Bot) {
         console.error("Telegram Reply Error:", e);
         throw e;
       }
-    } as any;
+    }) as any;
 
     const { data: userSettings } = await supabaseAdmin
       .from('user_settings')
