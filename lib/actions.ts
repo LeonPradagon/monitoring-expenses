@@ -154,6 +154,20 @@ export async function deleteCategory(id: string) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: "Unauthorized" };
 
+    // Hapus referensi kategori di transaksi (set null)
+    await supabase
+        .from('transactions')
+        .update({ category_id: null })
+        .eq('category_id', id)
+        .eq('user_id', user.id);
+
+    // Hapus referensi kategori di budget (set null)
+    await supabase
+        .from('budgets')
+        .update({ category_id: null })
+        .eq('category_id', id)
+        .eq('user_id', user.id);
+
     const { error } = await supabase
         .from('categories')
         .delete()
@@ -161,9 +175,6 @@ export async function deleteCategory(id: string) {
         .eq('user_id', user.id);
 
     if (error) {
-        if (error.code === '23503') {
-            return { error: "Kategori tidak dapat dihapus karena sudah digunakan dalam transaksi." };
-        }
         return { error: error.message };
     }
     return { success: true };
