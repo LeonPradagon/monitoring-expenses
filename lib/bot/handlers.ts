@@ -56,38 +56,53 @@ export function setupHandlers(bot: Bot) {
   });
 
   bot.command(["bantuan", "help"], async (ctx) => {
-    return ctx.reply(
-      "👋 <b>Bantuan Nanalys</b>\n\n" +
-      "Ketik aja transaksimu pakai bahasa sehari-hari. Contoh:\n" +
-      "• <i>Makan siang 50rb pakai BCA</i>\n" +
-      "• <i>Gaji masuk 5jt ke Mandiri</i>\n" +
-      "• <i>Beli kopi 25k</i>\n\n" +
-      "Nanalys bakal otomatis catat ke akun & kategori yang pas!",
-      {
-        parse_mode: "HTML",
-        reply_markup: new InlineKeyboard().url("Lihat Dashboard", process.env.NEXT_PUBLIC_APP_URL || "https://monitoring-expenses.vercel.app")
-      }
-    );
+    try {
+      return await ctx.reply(
+        "👋 <b>Bantuan Nanalys</b>\n\n" +
+        "Ketik aja transaksimu pakai bahasa sehari-hari. Contoh:\n" +
+        "• <i>Makan siang 50rb pakai BCA</i>\n" +
+        "• <i>Gaji masuk 5jt ke Mandiri</i>\n" +
+        "• <i>Beli kopi 25k</i>\n\n" +
+        "Nanalys bakal otomatis catat ke akun & kategori yang pas!",
+        {
+          parse_mode: "HTML",
+          reply_markup: new InlineKeyboard().url("Lihat Dashboard", process.env.NEXT_PUBLIC_APP_URL || "https://monitoring-expenses.vercel.app")
+        }
+      );
+    } catch (error) {
+      console.error("Bantuan command error:", error);
+      return ctx.reply("👋 Bantuan Nanalys\n\nKetik aja transaksimu pakai bahasa sehari-hari. Contoh:\n• Makan siang 50rb pakai BCA\n• Gaji masuk 5jt ke Mandiri\n• Beli kopi 25k\n\nNanalys bakal otomatis catat ke akun & kategori yang pas!");
+    }
   });
 
   bot.command("saldo", async (ctx) => {
-    const { data: userSettings } = await supabaseAdmin
-      .from('user_settings')
-      .select('user_id')
-      .eq('telegram_chat_id', ctx.chat.id.toString())
-      .maybeSingle();
+    try {
+      const { data: userSettings } = await supabaseAdmin
+        .from('user_settings')
+        .select('user_id')
+        .eq('telegram_chat_id', ctx.chat.id.toString())
+        .maybeSingle();
 
-    const userId = userSettings?.user_id;
-    if (!userId) return ctx.reply("Akun belum terhubung. Klik connect dari Web Dashboard.");
+      const userId = userSettings?.user_id;
+      if (!userId) return ctx.reply("Akun belum terhubung. Klik connect dari Web Dashboard.");
 
-    const { data: accounts } = await supabaseAdmin.from('accounts').select('*').eq('user_id', userId);
-    if (!accounts || accounts.length === 0) return ctx.reply("Belum ada akun keuangan yang terdaftar.");
-    
-    const balances = accounts.map(a => `💰 <b>${a.name}</b>: Rp ${Number(a.balance).toLocaleString('id-ID')}`).join('\n');
-    return ctx.reply(`<b>Saldo Akun Anda:</b>\n\n${balances}`, {
-      parse_mode: "HTML",
-      reply_markup: new InlineKeyboard().url("Cek Detail di Web", process.env.NEXT_PUBLIC_APP_URL || "https://monitoring-expenses.vercel.app")
-    });
+      const { data: accounts } = await supabaseAdmin.from('accounts').select('*').eq('user_id', userId);
+      if (!accounts || accounts.length === 0) return ctx.reply("Belum ada akun keuangan yang terdaftar.");
+      
+      const balances = accounts.map(a => `💰 <b>${a.name}</b>: Rp ${Number(a.balance).toLocaleString('id-ID')}`).join('\n');
+      
+      try {
+        return await ctx.reply(`<b>Saldo Akun Anda:</b>\n\n${balances}`, {
+          parse_mode: "HTML",
+          reply_markup: new InlineKeyboard().url("Cek Detail di Web", process.env.NEXT_PUBLIC_APP_URL || "https://monitoring-expenses.vercel.app")
+        });
+      } catch (replyErr) {
+        return await ctx.reply(`Saldo Akun Anda:\n\n${balances.replace(/<[^>]*>?/gm, '')}`);
+      }
+    } catch (error) {
+      console.error("Saldo command error:", error);
+      return ctx.reply("❌ Gagal mengecek saldo. Terjadi kesalahan sistem.");
+    }
   });
 
   bot.on("message:text", async (ctx) => {
