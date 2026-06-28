@@ -4,14 +4,18 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Target, Plus, Trash2 } from "lucide-react";
-import { createCategory, deleteCategory } from "@/lib/actions";
+import { Loader2, Target, Plus, Trash2, Pencil, Check, X } from "lucide-react";
+import { createCategory, deleteCategory, updateCategory } from "@/lib/actions";
 import Swal from "sweetalert2";
 
 export function CategoryManager({ categories, onUpdate }: { categories: any[], onUpdate: () => void }) {
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
   const [newType, setNewType] = useState("expense");
+  
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editType, setEditType] = useState("expense");
 
   const handleAddCategory = async () => {
     if (!newName) return;
@@ -121,6 +125,56 @@ export function CategoryManager({ categories, onUpdate }: { categories: any[], o
     }
   };
 
+  const handleUpdateCategory = async (id: string) => {
+    if (!editName) return;
+    setLoadingId(id);
+
+    try {
+      const res = await updateCategory(id, {
+        name: editName,
+        type: editType,
+        icon: editType === 'expense' ? '💸' : '💰'
+      });
+
+      if (res?.error) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Gagal',
+          text: res.error,
+          background: '#18181b',
+          color: '#fff',
+          confirmButtonColor: '#10b981'
+        });
+        return;
+      }
+
+      setEditingId(null);
+      onUpdate();
+      
+      Swal.fire({
+        icon: 'success',
+        title: 'Berhasil',
+        text: 'Kategori berhasil diperbarui!',
+        background: '#18181b',
+        color: '#fff',
+        confirmButtonColor: '#10b981',
+        timer: 1500,
+        showConfirmButton: false
+      });
+    } catch (error: any) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Gagal',
+        text: "Gagal memperbarui kategori: " + error.message,
+        background: '#18181b',
+        color: '#fff',
+        confirmButtonColor: '#10b981'
+      });
+    } finally {
+      setLoadingId(null);
+    }
+  };
+
   return (
     <Card className="border-white/5 bg-white/[0.02] backdrop-blur-sm">
       <CardHeader>
@@ -133,24 +187,82 @@ export function CategoryManager({ categories, onUpdate }: { categories: any[], o
         <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
           {categories.map((cat) => (
             <div key={cat.id} className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/5 group hover:bg-white/[0.08] transition-all">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-sm">
-                  {cat.icon}
+              {editingId === cat.id ? (
+                <div className="flex-1 flex items-center gap-2 pr-2">
+                  <Input 
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="bg-zinc-950/50 border-white/10 h-8 text-sm w-full"
+                    autoFocus
+                  />
+                  <select
+                    value={editType}
+                    onChange={(e) => setEditType(e.target.value)}
+                    className="bg-zinc-950 border border-white/10 rounded-md px-2 text-sm text-white w-24 h-8"
+                  >
+                    <option value="expense">Expense</option>
+                    <option value="income">Income</option>
+                  </select>
                 </div>
-                <div>
-                  <div className="font-bold text-white text-sm">{cat.name}</div>
-                  <div className="text-xs text-muted-foreground uppercase">{cat.type}</div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-sm">
+                    {cat.icon}
+                  </div>
+                  <div>
+                    <div className="font-bold text-white text-sm">{cat.name}</div>
+                    <div className="text-xs text-muted-foreground uppercase">{cat.type}</div>
+                  </div>
                 </div>
-              </div>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="text-rose-500 hover:bg-rose-500/20 hover:text-rose-400 h-8 w-8 p-0"
-                onClick={() => handleDeleteCategory(cat.id)}
-                disabled={loadingId === cat.id}
-              >
-                {loadingId === cat.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-              </Button>
+              )}
+              
+              {editingId === cat.id ? (
+                <div className="flex items-center gap-1">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="text-emerald-500 hover:bg-emerald-500/20 hover:text-emerald-400 h-8 w-8 p-0"
+                    onClick={() => handleUpdateCategory(cat.id)}
+                    disabled={loadingId === cat.id}
+                  >
+                    {loadingId === cat.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 h-8 w-8 p-0"
+                    onClick={() => setEditingId(null)}
+                    disabled={loadingId === cat.id}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="text-sky-500 hover:bg-sky-500/20 hover:text-sky-400 h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={() => {
+                      setEditingId(cat.id);
+                      setEditName(cat.name);
+                      setEditType(cat.type);
+                    }}
+                    disabled={loadingId !== null}
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="text-rose-500 hover:bg-rose-500/20 hover:text-rose-400 h-8 w-8 p-0"
+                    onClick={() => handleDeleteCategory(cat.id)}
+                    disabled={loadingId === cat.id}
+                  >
+                    {loadingId === cat.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  </Button>
+                </div>
+              )}
             </div>
           ))}
           {categories.length === 0 && (

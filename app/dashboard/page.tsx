@@ -14,7 +14,7 @@ import { CategoryManager } from "@/components/CategoryManager";
 import { AccountManager } from "@/components/AccountManager";
 import { getDashboardData } from "@/lib/actions";
 
-import BudgetWidget from "@/components/BudgetWidget";
+import { BudgetManager } from "@/components/BudgetManager";
 
 export default function DashboardPage() {
   const [user, setUser] = useState<any>(null);
@@ -204,7 +204,7 @@ export default function DashboardPage() {
                     }
                   }} 
                 />
-                <BudgetWidget />
+                <BudgetManager categories={categories} />
               </div>
             </div>
           </>

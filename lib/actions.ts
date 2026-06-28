@@ -210,3 +210,76 @@ export async function getContextForAI(userId: string) {
     };
 }
 
+export async function updateCategory(id: string, data: { name: string, type: string, icon?: string }) {
+    const supabase = await createServerSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: "Unauthorized" };
+
+    const { error } = await supabase
+        .from('categories')
+        .update({
+            name: data.name,
+            type: data.type,
+            icon: data.icon
+        })
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+    if (error) return { error: error.message };
+    return { success: true };
+}
+
+export async function createBudget(data: { category_id: string, amount: number, period: string, name: string }) {
+    const supabase = await createServerSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: "Unauthorized" };
+
+    const { data: budget, error } = await supabase
+        .from('budgets')
+        .insert({
+            user_id: user.id,
+            category_id: data.category_id,
+            amount: data.amount,
+            period: data.period,
+            name: data.name
+        })
+        .select()
+        .single();
+
+    if (error) return { error: error.message };
+    return { success: true, budget };
+}
+
+export async function updateBudget(id: string, data: { amount: number, period: string }) {
+    const supabase = await createServerSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: "Unauthorized" };
+
+    const { error } = await supabase
+        .from('budgets')
+        .update({
+            amount: data.amount,
+            period: data.period
+        })
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+    if (error) return { error: error.message };
+    return { success: true };
+}
+
+export async function deleteBudget(id: string) {
+    const supabase = await createServerSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: "Unauthorized" };
+
+    const { error } = await supabase
+        .from('budgets')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+    if (error) return { error: error.message };
+    return { success: true };
+}
+

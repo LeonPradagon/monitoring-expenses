@@ -439,5 +439,91 @@ export function setupHandlers(bot: Bot) {
         return ctx.reply("❌ Gagal mengatur budget. Terjadi kesalahan sistem.");
       }
     }
+
+    if (parsed.intent === "delete_budget") {
+      try {
+        let categoryId = parsed.category_id;
+        
+        if (!categoryId && parsed.category_name) {
+          const cat = context.categories.find((c: any) => c.name.toLowerCase().includes(parsed.category_name.toLowerCase()));
+          if (cat) categoryId = cat.id;
+        }
+
+        if (!categoryId) {
+          return ctx.reply("❌ Kategori tidak ditemukan. Sebutkan budget mana yang ingin dihapus.");
+        }
+
+        const { data: existingBudget } = await supabaseAdmin
+          .from('budgets')
+          .select('id, name')
+          .eq('user_id', userId)
+          .eq('category_id', categoryId)
+          .single();
+
+        if (!existingBudget) {
+          return ctx.reply("❌ Budget untuk kategori ini tidak ditemukan.");
+        }
+
+        await supabaseAdmin.from('budgets').delete().eq('id', existingBudget.id);
+        return ctx.reply(`✅ <b>Budget Berhasil Dihapus!</b>\n\nBudget "${existingBudget.name}" sudah tidak lagi diawasi.`, { parse_mode: "HTML" });
+      } catch (error) {
+        console.error("Delete budget error:", error);
+        return ctx.reply("❌ Gagal menghapus budget. Terjadi kesalahan sistem.");
+      }
+    }
+
+    if (parsed.intent === "manage_category") {
+      try {
+        const action = parsed.action; // create, update, delete
+        
+        if (action === "create") {
+          const name = parsed.new_name || parsed.category_name;
+          if (!name) return ctx.reply("❌ Nama kategori tidak boleh kosong.");
+          const type = parsed.type === 'income' ? 'income' : 'expense';
+          const icon = type === 'income' ? '💰' : '💸';
+
+          await supabaseAdmin.from('categories').insert({
+            user_id: userId,
+            name: name,
+            type: type,
+            icon: icon
+          });
+
+          return ctx.reply(`✅ <b>Kategori Berhasil Dibuat!</b>\n\n📝 <b>Nama</b>: ${name}\n🏷️ <b>Tipe</b>: ${type === 'income' ? 'Pemasukan' : 'Pengeluaran'}\n`, { parse_mode: "HTML" });
+        }
+        
+        if (action === "update") {
+          const categoryId = parsed.category_id;
+          const newName = parsed.new_name;
+          if (!categoryId || !newName) return ctx.reply("❌ Kategori lama tidak ditemukan atau nama baru kosong.");
+
+          const { error } = await supabaseAdmin.from('categories').update({ name: newName }).eq('id', categoryId).eq('user_id', userId);
+          if (error) throw error;
+
+          return ctx.reply(`✅ <b>Nama Kategori Diperbarui!</b>\n\nKategori sekarang menjadi: <b>${newName}</b>`, { parse_mode: "HTML" });
+        }
+        
+        if (action === "delete") {
+          const categoryId = parsed.category_id;
+          if (!categoryId) return ctx.reply("❌ Kategori yang ingin dihapus tidak ditemukan.");
+
+          const { error } = await supabaseAdmin.from('categories').delete().eq('id', categoryId).eq('user_id', userId);
+          
+          if (error) {
+            if (error.code === '23503') {
+              return ctx.reply("❌ Kategori tidak dapat dihapus karena masih digunakan pada salah satu transaksi Anda.");
+            }
+            throw error;
+          }
+
+          return ctx.reply(`✅ <b>Kategori Berhasil Dihapus!</b>`, { parse_mode: "HTML" });
+        }
+
+        return ctx.reply("❌ Aksi manajemen kategori tidak dikenali.");
+      } catch (error) {
+        console.error("Manage category error:", error);
+        return ctx.reply("❌ Gagal mengelola kategori. Terjadi kesalahan sistem.");
+      }
+    }
   });
 }

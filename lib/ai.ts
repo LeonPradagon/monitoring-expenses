@@ -41,6 +41,20 @@ Jika user meminta untuk mengatur, membuat, atau mengubah budget:
 4. "amount": nominal budget.
 5. "period": "monthly".
 
+ATURAN MODE "delete_budget":
+Jika user meminta untuk menghapus budget:
+1. "intent" harus "delete_budget".
+2. "category_id": pilih ID kategori yang relevan.
+3. "category_name": Tulis nama kategori jika category_id kosong.
+
+ATURAN MODE "manage_category":
+Jika user meminta untuk membuat, mengedit, atau menghapus kategori transaksi:
+1. "intent" harus "manage_category".
+2. "action": pilih "create", "update", atau "delete".
+3. "category_id": pilih ID kategori yang dimaksud (khusus untuk update/delete).
+4. "new_name": nama baru kategori (jika create atau update nama).
+5. "type": "expense" atau "income" (default: "expense").
+
 ATURAN MODE "check_balance":
 Jika user menanyakan berapa saldo / sisa uang mereka:
 1. "intent" harus "check_balance".
