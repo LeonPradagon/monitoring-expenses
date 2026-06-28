@@ -91,6 +91,27 @@ export function setupHandlers(bot: Bot) {
   });
 
   bot.on("message:text", async (ctx) => {
+    // Override ctx.reply to safely handle HTML parsing errors from Telegram
+    const originalReply = ctx.reply.bind(ctx);
+    ctx.reply = async (text: string, options?: any) => {
+      if (options?.parse_mode === "HTML") {
+        try {
+          return await originalReply(text, options);
+        } catch (e) {
+          console.error("Telegram HTML Error fallback:", e);
+          const plainOptions = { ...options };
+          delete plainOptions.parse_mode;
+          return await originalReply(text.replace(/<[^>]*>?/gm, ''), plainOptions);
+        }
+      }
+      try {
+        return await originalReply(text, options);
+      } catch (e) {
+        console.error("Telegram Reply Error:", e);
+        throw e;
+      }
+    } as any;
+
     const { data: userSettings } = await supabaseAdmin
       .from('user_settings')
       .select('user_id')
