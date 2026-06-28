@@ -202,7 +202,7 @@ export function setupHandlers(bot: Bot) {
         }
 
         // Calculate new balance
-        const { data: accountData } = await supabaseAdmin.from('accounts').select('balance').eq('id', accountId).single();
+        const { data: accountData } = await supabaseAdmin.from('accounts').select('balance, name').eq('id', accountId).single();
         let currentBalance = parseFloat(accountData?.balance || 0);
         const amount = parseFloat(parsed.amount);
         if (parsed.type === 'expense') currentBalance -= amount;
