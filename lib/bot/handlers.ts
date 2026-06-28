@@ -87,17 +87,53 @@ export function setupHandlers(bot: Bot) {
       if (!userId) return ctx.reply("Akun belum terhubung. Klik connect dari Web Dashboard.");
 
       const { data: accounts } = await supabaseAdmin.from('accounts').select('*').eq('user_id', userId);
-      if (!accounts || accounts.length === 0) return ctx.reply("Belum ada akun keuangan yang terdaftar.");
+      const formatter = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });
       
-      const balances = accounts.map(a => `💰 <b>${a.name}</b>: Rp ${Number(a.balance).toLocaleString('id-ID')}`).join('\n');
+      let replyMsg = "";
+      if (accounts && accounts.length > 0) {
+        const balances = accounts.map(a => `💰 <b>${a.name}</b>: ${formatter.format(Number(a.balance))}`).join('\n');
+        replyMsg += `<b>Saldo Akun Anda:</b>\n\n${balances}\n\n`;
+      } else {
+        replyMsg += "<b>Saldo Akun Anda:</b>\nBelum ada akun keuangan yang terdaftar.\n\n";
+      }
+
+      const { data: budgets } = await supabaseAdmin.from('budgets').select('*, categories(name)').eq('user_id', userId).eq('is_active', true);
+      
+      if (budgets && budgets.length > 0) {
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        startOfMonth.setHours(0,0,0,0);
+        
+        const { data: expenses } = await supabaseAdmin
+          .from('transactions')
+          .select('amount, category_id')
+          .eq('user_id', userId)
+          .eq('type', 'expense')
+          .gte('date', startOfMonth.toISOString().split('T')[0]);
+
+        replyMsg += "📊 <b>Status Budget Bulan Ini:</b>\n\n";
+
+        for (const b of budgets) {
+          const spent = expenses?.filter(e => e.category_id === b.category_id).reduce((sum, e) => sum + parseFloat(e.amount), 0) || 0;
+          const remaining = parseFloat(b.amount) - spent;
+          const percent = Math.min(100, Math.round((spent / parseFloat(b.amount)) * 100));
+          const icon = percent >= 100 ? "🔴" : percent >= (b.alert_at || 80) ? "🟡" : "🟢";
+          
+          replyMsg += `${icon} <b>${b.name}</b>\n`;
+          replyMsg += `Terpakai: ${formatter.format(spent)} (${percent}%)\n`;
+          replyMsg += `Sisa: <b>${formatter.format(remaining)}</b>\n\n`;
+        }
+      } else {
+        replyMsg += "📊 <b>Status Budget Bulan Ini:</b>\nBelum ada budget aktif.";
+      }
       
       try {
-        return await ctx.reply(`<b>Saldo Akun Anda:</b>\n\n${balances}`, {
+        return await ctx.reply(replyMsg.trim(), {
           parse_mode: "HTML",
           reply_markup: new InlineKeyboard().url("Cek Detail di Web", process.env.NEXT_PUBLIC_APP_URL || "https://monitoring-expenses.vercel.app")
         });
       } catch (replyErr) {
-        return await ctx.reply(`Saldo Akun Anda:\n\n${balances.replace(/<[^>]*>?/gm, '')}`);
+        return await ctx.reply(replyMsg.replace(/<[^>]*>?/gm, '').trim());
       }
     } catch (error) {
       console.error("Saldo command error:", error);
