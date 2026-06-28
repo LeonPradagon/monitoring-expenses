@@ -240,7 +240,7 @@ export function setupHandlers(bot: Bot) {
             .select('amount, alert_at, name')
             .eq('user_id', userId)
             .eq('category_id', categoryId)
-            .single();
+            .maybeSingle();
             
           if (budget) {
             const date = new Date();
@@ -270,12 +270,12 @@ export function setupHandlers(bot: Bot) {
         }
         
         return ctx.reply(
+          (parsed.response_message ? `🤖 <i>${parsed.response_message}</i>\n\n` : '') +
           `✅ <b>Transaksi Berhasil Dicatat!</b>\n\n` +
           `📝 <b>Keterangan</b>: ${parsed.description}\n` +
           `💵 <b>Nominal</b>: ${amountStr}\n` +
           `🏷️ <b>Tipe</b>: ${typeStr}` +
-          budgetAlertMsg + `\n\n` +
-          `Semangat terus atur keuangannya! 🚀`,
+          budgetAlertMsg,
           {
             parse_mode: "HTML",
             reply_markup: new InlineKeyboard().url("Cek di Web", process.env.NEXT_PUBLIC_APP_URL || "https://monitoring-expenses.vercel.app")
@@ -327,6 +327,7 @@ export function setupHandlers(bot: Bot) {
         const sign = difference > 0 ? '+' : '-';
         
         return ctx.reply(
+          (parsed.response_message ? `🤖 <i>${parsed.response_message}</i>\n\n` : '') +
           `✅ <b>Saldo ${accountData?.name} Berhasil Diperbarui!</b>\n\n` +
           `💰 <b>Saldo Akhir</b>: ${formatter.format(targetBalance)}\n` +
           `📝 <i>(Penyesuaian Otomatis: ${sign}${formatter.format(txAmount)})</i>\n`,
@@ -364,10 +365,10 @@ export function setupHandlers(bot: Bot) {
         
         const formatter = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });
         return ctx.reply(
+          (parsed.response_message ? `🤖 <i>${parsed.response_message}</i>\n\n` : '') +
           `✅ <b>Akun "${name}" Berhasil Dibuat!</b>\n\n` +
           `💳 <b>Tipe</b>: ${type}\n` +
-          `💰 <b>Saldo Awal</b>: ${formatter.format(initialBalance)}\n\n` +
-          `Sekarang kamu bisa mencatat transaksi ke akun ini!`,
+          `💰 <b>Saldo Awal</b>: ${formatter.format(initialBalance)}\n`,
           { parse_mode: "HTML" }
         );
       } catch (error) {
@@ -428,10 +429,10 @@ export function setupHandlers(bot: Bot) {
         
         const formatter = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });
         return ctx.reply(
+          (parsed.response_message ? `🤖 <i>${parsed.response_message}</i>\n\n` : '') +
           `✅ <b>Budget Berhasil Ditetapkan!</b>\n\n` +
           `📊 <b>Kategori</b>: ${categoryName}\n` +
-          `💰 <b>Anggaran</b>: ${formatter.format(amount)} / ${period === 'monthly' ? 'Bulan' : 'Minggu'}\n\n` +
-          `Saya akan mengawasinya. Gunakan uangmu dengan bijak! 💼`,
+          `💰 <b>Anggaran</b>: ${formatter.format(amount)} / ${period === 'monthly' ? 'Bulan' : 'Minggu'}\n`,
           { parse_mode: "HTML" }
         );
       } catch (error) {
@@ -465,7 +466,11 @@ export function setupHandlers(bot: Bot) {
         }
 
         await supabaseAdmin.from('budgets').delete().eq('id', existingBudget.id);
-        return ctx.reply(`✅ <b>Budget Berhasil Dihapus!</b>\n\nBudget "${existingBudget.name}" sudah tidak lagi diawasi.`, { parse_mode: "HTML" });
+        return ctx.reply(
+          (parsed.response_message ? `🤖 <i>${parsed.response_message}</i>\n\n` : '') +
+          `✅ <b>Budget Berhasil Dihapus!</b>\n\nBudget "${existingBudget.name}" sudah tidak lagi diawasi.`, 
+          { parse_mode: "HTML" }
+        );
       } catch (error) {
         console.error("Delete budget error:", error);
         return ctx.reply("❌ Gagal menghapus budget. Terjadi kesalahan sistem.");
@@ -489,7 +494,11 @@ export function setupHandlers(bot: Bot) {
             icon: icon
           });
 
-          return ctx.reply(`✅ <b>Kategori Berhasil Dibuat!</b>\n\n📝 <b>Nama</b>: ${name}\n🏷️ <b>Tipe</b>: ${type === 'income' ? 'Pemasukan' : 'Pengeluaran'}\n`, { parse_mode: "HTML" });
+          return ctx.reply(
+            (parsed.response_message ? `🤖 <i>${parsed.response_message}</i>\n\n` : '') +
+            `✅ <b>Kategori Berhasil Dibuat!</b>\n\n📝 <b>Nama</b>: ${name}\n🏷️ <b>Tipe</b>: ${type === 'income' ? 'Pemasukan' : 'Pengeluaran'}\n`, 
+            { parse_mode: "HTML" }
+          );
         }
         
         if (action === "update") {
@@ -500,7 +509,11 @@ export function setupHandlers(bot: Bot) {
           const { error } = await supabaseAdmin.from('categories').update({ name: newName }).eq('id', categoryId).eq('user_id', userId);
           if (error) throw error;
 
-          return ctx.reply(`✅ <b>Nama Kategori Diperbarui!</b>\n\nKategori sekarang menjadi: <b>${newName}</b>`, { parse_mode: "HTML" });
+          return ctx.reply(
+            (parsed.response_message ? `🤖 <i>${parsed.response_message}</i>\n\n` : '') +
+            `✅ <b>Nama Kategori Diperbarui!</b>\n\nKategori sekarang menjadi: <b>${newName}</b>`, 
+            { parse_mode: "HTML" }
+          );
         }
         
         if (action === "delete") {
@@ -516,7 +529,11 @@ export function setupHandlers(bot: Bot) {
             throw error;
           }
 
-          return ctx.reply(`✅ <b>Kategori Berhasil Dihapus!</b>`, { parse_mode: "HTML" });
+          return ctx.reply(
+            (parsed.response_message ? `🤖 <i>${parsed.response_message}</i>\n\n` : '') +
+            `✅ <b>Kategori Berhasil Dihapus!</b>`, 
+            { parse_mode: "HTML" }
+          );
         }
 
         return ctx.reply("❌ Aksi manajemen kategori tidak dikenali.");
@@ -525,5 +542,8 @@ export function setupHandlers(bot: Bot) {
         return ctx.reply("❌ Gagal mengelola kategori. Terjadi kesalahan sistem.");
       }
     }
+    
+    // Fallback if AI returned unknown intent
+    return ctx.reply(parsed.response_message || "Maaf, instruksi tersebut berhasil dipahami tapi Nanalys belum mendukung aksi tersebut.", { parse_mode: "HTML" });
   });
 }
