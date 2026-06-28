@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, Target, Plus, Trash2 } from "lucide-react";
 import { createCategory, deleteCategory } from "@/lib/actions";
+import Swal from "sweetalert2";
 
 export function CategoryManager({ categories, onUpdate }: { categories: any[], onUpdate: () => void }) {
   const [loadingId, setLoadingId] = useState<string | null>(null);
@@ -17,29 +18,104 @@ export function CategoryManager({ categories, onUpdate }: { categories: any[], o
     setLoadingId('new');
 
     try {
-      await createCategory({
+      const res = await createCategory({
         name: newName,
         type: newType,
         icon: newType === 'expense' ? '💸' : '💰'
       });
+
+      if (res?.error) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Gagal',
+          text: res.error,
+          background: '#18181b',
+          color: '#fff',
+          confirmButtonColor: '#10b981'
+        });
+        return;
+      }
+
       setNewName("");
       onUpdate();
+      
+      Swal.fire({
+        icon: 'success',
+        title: 'Berhasil',
+        text: 'Kategori berhasil ditambahkan!',
+        background: '#18181b',
+        color: '#fff',
+        confirmButtonColor: '#10b981',
+        timer: 1500,
+        showConfirmButton: false
+      });
     } catch (error: any) {
-      alert("Gagal menambahkan kategori: " + error.message);
+      Swal.fire({
+        icon: 'error',
+        title: 'Gagal',
+        text: "Gagal menambahkan kategori: " + error.message,
+        background: '#18181b',
+        color: '#fff',
+        confirmButtonColor: '#10b981'
+      });
     } finally {
       setLoadingId(null);
     }
   };
 
   const handleDeleteCategory = async (id: string) => {
-    if (!confirm("Apakah Anda yakin ingin menghapus kategori ini?")) return;
+    const result = await Swal.fire({
+      title: 'Hapus Kategori?',
+      text: "Anda yakin ingin menghapus kategori ini?",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#3f3f46',
+      confirmButtonText: 'Ya, hapus!',
+      cancelButtonText: 'Batal',
+      background: '#18181b',
+      color: '#fff'
+    });
+
+    if (!result.isConfirmed) return;
     
     setLoadingId(id);
     try {
-      await deleteCategory(id);
+      const res = await deleteCategory(id);
+      
+      if (res?.error) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Gagal',
+          text: res.error,
+          background: '#18181b',
+          color: '#fff',
+          confirmButtonColor: '#10b981'
+        });
+        return;
+      }
+      
       onUpdate();
+      
+      Swal.fire({
+        icon: 'success',
+        title: 'Terhapus!',
+        text: 'Kategori berhasil dihapus.',
+        background: '#18181b',
+        color: '#fff',
+        confirmButtonColor: '#10b981',
+        timer: 1500,
+        showConfirmButton: false
+      });
     } catch (error: any) {
-      alert("Gagal menghapus kategori: " + error.message);
+      Swal.fire({
+        icon: 'error',
+        title: 'Gagal',
+        text: "Gagal menghapus kategori: " + error.message,
+        background: '#18181b',
+        color: '#fff',
+        confirmButtonColor: '#10b981'
+      });
     } finally {
       setLoadingId(null);
     }

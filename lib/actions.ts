@@ -57,7 +57,7 @@ export async function createAccount(data: { name: string, type: string, balance:
 export async function createCategory(data: { name: string, type: string, icon?: string }) {
     const supabase = await createServerSupabaseClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error("Unauthorized");
+    if (!user) return { error: "Unauthorized" };
 
     const { data: category, error } = await supabase
         .from('categories')
@@ -70,7 +70,7 @@ export async function createCategory(data: { name: string, type: string, icon?: 
         .select()
         .single();
 
-    if (error) throw error;
+    if (error) return { error: error.message };
     return category;
 }
 
@@ -152,7 +152,7 @@ export async function deleteAccount(id: string) {
 export async function deleteCategory(id: string) {
     const supabase = await createServerSupabaseClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error("Unauthorized");
+    if (!user) return { error: "Unauthorized" };
 
     const { error } = await supabase
         .from('categories')
@@ -160,8 +160,13 @@ export async function deleteCategory(id: string) {
         .eq('id', id)
         .eq('user_id', user.id);
 
-    if (error) throw error;
-    return true;
+    if (error) {
+        if (error.code === '23503') {
+            return { error: "Kategori tidak dapat dihapus karena sudah digunakan dalam transaksi." };
+        }
+        return { error: error.message };
+    }
+    return { success: true };
 }
 
 export async function getUserByTelegramId(chatId: string) {
