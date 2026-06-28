@@ -269,12 +269,14 @@ export function setupHandlers(bot: Bot) {
               
             const totalSpent = (expenses || []).reduce((sum, tx) => sum + Number(tx.amount), 0);
             const budgetAmount = Number(budget.amount);
+            const remainingBudget = budgetAmount - totalSpent;
             const alertThreshold = budget.alert_at ? Number(budget.alert_at) / 100 : 0.8;
             
-            if (totalSpent >= budgetAmount) {
-              budgetAlertMsg = `\n\n🚨 <b>PERINGATAN</b>: Pengeluaran "${budget.name}" bulan ini (${formatter.format(totalSpent)}) sudah <b>MELEBIHI</b> budget (${formatter.format(budgetAmount)})! Hati-hati ya!`;
+            budgetAlertMsg = `\n\n📊 <b>Sisa Budget "${budget.name}":</b> ${formatter.format(remainingBudget)}\n`;
+            if (totalSpent > budgetAmount) {
+              budgetAlertMsg += `🚨 <i>(Overbudget!)</i>`;
             } else if (totalSpent >= budgetAmount * alertThreshold) {
-              budgetAlertMsg = `\n\n⚠️ <b>Peringatan</b>: Sisa budget "${budget.name}" bulan ini tinggal <b>${formatter.format(budgetAmount - totalSpent)}</b>. Yuk mulai hemat!`;
+              budgetAlertMsg += `⚠️ <i>(Hati-hati, sudah menipis)</i>`;
             }
           }
         }
@@ -284,7 +286,8 @@ export function setupHandlers(bot: Bot) {
           `✅ <b>Transaksi Berhasil Dicatat!</b>\n\n` +
           `📝 <b>Keterangan</b>: ${parsed.description}\n` +
           `💵 <b>Nominal</b>: ${amountStr}\n` +
-          `🏷️ <b>Tipe</b>: ${typeStr}` +
+          `🏷️ <b>Tipe</b>: ${typeStr}\n` +
+          `💳 <b>Sisa Saldo ${accountData?.name || 'Akun'}:</b> ${formatter.format(currentBalance)}` +
           budgetAlertMsg,
           {
             parse_mode: "HTML",
@@ -294,6 +297,89 @@ export function setupHandlers(bot: Bot) {
       } catch (error) {
         console.error(error);
         return ctx.reply("❌ Gagal mencatat transaksi. Terjadi kesalahan pada sistem.");
+      }
+    }
+
+    if (parsed.intent === "update_transaction" || parsed.intent === "delete_transaction") {
+      try {
+        const oldDesc = parsed.old_description?.toLowerCase();
+        if (!oldDesc) return ctx.reply("❌ Sistem tidak dapat mengenali nama transaksi yang ingin diubah/dihapus.");
+
+        // Cari transaksi dalam 14 hari terakhir
+        const fourteenDaysAgo = new Date();
+        fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+        
+        const { data: recentTx } = await supabaseAdmin
+          .from('transactions')
+          .select('*, accounts(id, name, balance)')
+          .eq('user_id', userId)
+          .gte('date', fourteenDaysAgo.toISOString().split('T')[0])
+          .order('date', { ascending: false })
+          .order('created_at', { ascending: false });
+
+        if (!recentTx || recentTx.length === 0) {
+          return ctx.reply("❌ Tidak ditemukan transaksi dalam 14 hari terakhir.");
+        }
+
+        // Simple fuzzy match by description (substring)
+        const matchedTx = recentTx.find(tx => tx.description?.toLowerCase().includes(oldDesc));
+        
+        if (!matchedTx) {
+          return ctx.reply(`❌ Transaksi yang mirip dengan "${parsed.old_description}" tidak ditemukan dalam 14 hari terakhir.`);
+        }
+
+        const accountId = matchedTx.account_id;
+        const currentAccBalance = parseFloat(matchedTx.accounts.balance || 0);
+        const oldAmount = parseFloat(matchedTx.amount);
+        let newAccBalance = currentAccBalance;
+        const formatter = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });
+
+        // Revert old transaction effect
+        if (matchedTx.type === 'expense') newAccBalance += oldAmount;
+        else if (matchedTx.type === 'income') newAccBalance -= oldAmount;
+
+        if (parsed.intent === "delete_transaction") {
+          // Update balance and delete
+          await supabaseAdmin.from('accounts').update({ balance: newAccBalance }).eq('id', accountId);
+          await supabaseAdmin.from('transactions').delete().eq('id', matchedTx.id);
+
+          return ctx.reply(
+            (parsed.response_message ? `🤖 <i>${parsed.response_message}</i>\n\n` : '') +
+            `✅ <b>Transaksi Berhasil Dihapus!</b>\n\n` +
+            `📝 <b>Keterangan</b>: ${matchedTx.description}\n` +
+            `💳 <b>Saldo ${matchedTx.accounts.name} Dikembalikan Menjadi:</b> ${formatter.format(newAccBalance)}`,
+            { parse_mode: "HTML", reply_markup: new InlineKeyboard().url("Cek di Web", process.env.NEXT_PUBLIC_APP_URL || "https://monitoring-expenses.vercel.app") }
+          );
+        } else {
+          // update_transaction
+          const newAmount = parsed.new_amount ? parseFloat(parsed.new_amount) : oldAmount;
+          const newDesc = parsed.new_description || matchedTx.description;
+          
+          // Apply new transaction effect
+          if (matchedTx.type === 'expense') newAccBalance -= newAmount;
+          else if (matchedTx.type === 'income') newAccBalance += newAmount;
+
+          await supabaseAdmin.from('accounts').update({ balance: newAccBalance }).eq('id', accountId);
+          await supabaseAdmin.from('transactions').update({ 
+            amount: newAmount,
+            description: newDesc
+          }).eq('id', matchedTx.id);
+
+          return ctx.reply(
+            (parsed.response_message ? `🤖 <i>${parsed.response_message}</i>\n\n` : '') +
+            `✅ <b>Transaksi Berhasil Diperbarui!</b>\n\n` +
+            `📝 <b>Keterangan Lama</b>: ${matchedTx.description}\n` +
+            `📝 <b>Keterangan Baru</b>: ${newDesc}\n` +
+            `💵 <b>Nominal Lama</b>: ${formatter.format(oldAmount)}\n` +
+            `💵 <b>Nominal Baru</b>: ${formatter.format(newAmount)}\n` +
+            `💳 <b>Saldo ${matchedTx.accounts.name} Saat Ini:</b> ${formatter.format(newAccBalance)}`,
+            { parse_mode: "HTML", reply_markup: new InlineKeyboard().url("Cek di Web", process.env.NEXT_PUBLIC_APP_URL || "https://monitoring-expenses.vercel.app") }
+          );
+        }
+
+      } catch (error) {
+        console.error(error);
+        return ctx.reply("❌ Gagal memproses data transaksi. Terjadi kesalahan pada sistem.");
       }
     }
 

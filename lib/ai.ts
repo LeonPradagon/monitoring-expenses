@@ -24,6 +24,18 @@ Jika user memberikan instruksi mencatat pengeluaran, pemasukan, atau transfer de
 6. "category_name": Tulis nama kategori yang disebutkan user secara rapi. Wajib diisi jika category_id kosong.
 7. "description": ringkasan singkat.
 
+ATURAN MODE "update_transaction":
+Jika user ingin mengubah nominal, nama, atau kategori dari transaksi yang sudah pernah dicatat sebelumnya:
+1. "intent" harus "update_transaction".
+2. "old_description": tebak nama/deskripsi transaksi yang ingin diubah (contoh: "makanan anjing").
+3. "new_amount": angka target nominal yang baru (opsional).
+4. "new_description": deskripsi baru (opsional).
+
+ATURAN MODE "delete_transaction":
+Jika user ingin menghapus, membatalkan, atau menghilangkan transaksi yang sudah tercatat:
+1. "intent" harus "delete_transaction".
+2. "old_description": tebak nama/deskripsi transaksi yang ingin dihapus (contoh: "makanan anjing").
+
 ATURAN MODE "update_balance":
 Jika user meminta untuk memperbarui, mengubah, atau menyamakan saldo akhir suatu akun:
 1. "intent" harus "update_balance".
